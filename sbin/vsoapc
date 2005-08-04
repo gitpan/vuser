@@ -1,0 +1,268 @@
+#!/usr/bin/perl
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+use warnings;
+use strict;
+
+# Copyright 2004 Randy Smith
+# $Id: vsoapc,v 1.4 2005/07/02 20:19:09 perlstalker Exp $
+
+use Getopt::Long qw(:config require_order);
+use FindBin;
+use Config::IniFiles;
+use Term::ReadKey;
+use Pod::Usage;
+use SOAP::Lite
+    on_fault=> sub { my ($soap, $res) = @_;
+		     die "Error: ", ref $res ? $res->faultstring : $soap->transport->status, "\n"
+		     };
+
+our $REVISION = (split (' ', '$Revision: 1.4 $'))[1];
+our $VERSION = '0.1.0';
+
+our $DEBUG = 0;
+
+BEGIN {
+
+    our @etc_dirs = ('/usr/local/etc',
+		     '/usr/local/etc/vuser',
+		     '/etc',
+		     '/etc/vuser',
+		     "$FindBin::Bin/../etc",
+		     "$FindBin::Bin",
+		     "$FindBin::Bin/..",
+                     "$FindBin::Bin/vuser",
+                     "$FindBin::Bin/../etc/vuser"
+                     );
+}
+
+use vars qw(@etc_dirs);
+
+use lib (map { "$_/extensions" } @etc_dirs);
+use lib (map { "$_/lib" } @etc_dirs);
+
+# It may be better to figure out a "nice" way to access Meta object data
+# in order to avoid shipping VUser::Meta with the this client.
+use VUser::Meta;
+
+my $config_file;
+for my $etc_dir (@etc_dirs)
+{
+    if (-e "$etc_dir/vuser.conf") {
+	$config_file = "$etc_dir/vuser.conf";
+	last;
+    }
+}
+
+if (not defined $config_file) {
+    die "Unable to find a vuser.conf file in ".join (", ", @etc_dirs).".\n";
+}
+
+my %cfg;
+tie %cfg, 'Config::IniFiles', (-file => $config_file);
+
+my $username = '';
+my $password = undef;
+my $curses = 0;
+my $ip = '';
+my $version = 0;
+
+GetOptions('username|u=s' => \$username,
+	   'password|p=s' => \$password,
+	   'curses'       => \$curses,
+	   'version'      => \$version
+	   );
+
+pod2usage("Missing option --username") unless $username;
+
+if ($version) {
+    print "Version: $VERSION\n";
+    exit;
+}
+
+if (not $password) {
+    print "Password: ";
+    ReadMode('noecho'); # Turn off character echo
+    $password = ReadLine(0);
+    chomp $password;
+    ReadMode(0); # Reset the tty
+    print "\n";
+}
+
+my $keyword = shift @ARGV || 'help';
+my $action = shift @ARGV;
+
+print "Keyword: $keyword Action: $action\n" if $DEBUG >= 1;
+
+# Actions cannot start with -
+if (defined $action
+    and $action =~ /^-/) {
+    unshift @ARGV, $action;
+    $action = '';
+}
+
+$action = '' unless defined $action;
+
+# Ok. Now it's time to do the action.
+my $host = $cfg{vsoapc}{'vsoap host'};
+$host =~ s!/$!!;
+
+my $login_ok = SOAP::Lite
+    -> uri ("$host/VUser/SOAP")
+    -> proxy ($host)
+    -> authenticate ($username, $password)
+    -> result;
+
+#print "Login: $login_ok\n";
+
+die "Bad user name or password\n" unless $login_ok;
+
+if ($keyword eq 'help') {
+    show_help($action);
+} else {
+    my %opts = create_opts($keyword, $action);
+    # Do action
+    my $results = SOAP::Lite
+	-> uri ("$host/VUser/SOAP")
+	-> proxy ($host)
+	-> run_tasks($username, $password, $ip, $keyword, $action, %opts)
+	-> result;
+}
+
+exit;
+
+sub show_help
+{
+    my $keyword = shift;
+
+    if (not $keyword) {
+	my $keywords = SOAP::Lite
+	    -> uri ("$host/VUser/SOAP")
+	    -> proxy ($host)
+	    -> get_keywords ($username, $password, $ip)
+	    -> result;
+foreach my $key (@$keywords) {
+	    my $descr = $key->{description} || 'No description';
+	    printf ("%8s - %s\n", $key->{keyword}, $descr);
+	}
+    } else {
+	print "Options marked with '*' are required.\n";
+	my $actions = SOAP::Lite
+	    -> uri ("$host/VUser/SOAP")
+	    -> proxy ($host)
+	    -> get_actions($username, $password, $ip, $keyword)
+	    -> result;
+	foreach my $action (@$actions) {
+	    my $descr = $action->{description} || 'No description';
+	    printf ("%8s - %s\n", $action->{action}, $action->{description});
+	    my $options = SOAP::Lite
+	        -> uri ("$host/VUser/SOAP")
+		-> proxy ($host)
+		-> get_options($username, $password, $ip,
+			       $keyword, $action->{action})
+		-> result;
+	    foreach my $option (@$options) {
+		my $descr = $option->{description} || 'No description';
+		printf("\t%-16s %s - %s\n",
+		       "--".$option->{option},
+		       ($option->{required}? '*': ' '),
+		       $descr);
+	    }
+	}
+    }
+}
+
+# Create options from meta data and options list.
+sub create_opts
+{
+    my $keyword = shift;
+    my $action = shift;
+
+    my $options = SOAP::Lite
+	-> uri ("$host/VUser/SOAP")
+	-> proxy ($host)
+	-> get_options ($username, $password, $ip, $keyword, $action)
+	-> result;
+
+    # This should be the same (or very similar to) what's done in
+    # VUser::ExtHandler
+    my %opts = ();
+    my @opt_defs = ();
+
+    foreach my $opt (@$options) {
+	my $gopt_type = '';
+
+	my $meta = SOAP::Lite
+	    -> uri ("$host/VUser/SOAP")
+	    -> proxy ($host)
+	    -> get_meta ($username, $password, $ip,
+			 $keyword, $opt->{option})
+	    -> result;
+	$meta = $meta->[0];
+
+	my $type = $meta->type;
+	if ($type eq 'string') {
+	    $gopt_type = '=s';
+	} elsif ($type eq 'integer') {
+	    $gopt_type = '=i';
+	} elsif ($type eq 'counter') {
+	    $gopt_type = '+';
+	} elsif ($type eq 'boolean') {
+	    $gopt_type = '!';
+	} elsif ($type eq 'float') {
+	    $gopt_type = '=f';
+	}
+
+	my $def = $meta->name().$gopt_type;
+	push @opt_defs , $def;
+    }
+
+    if (@opt_defs) {
+	GetOptions(\%opts, @opt_defs);
+    }
+    return %opts;
+}
+
+sub revision
+{
+    print $REVISION;
+}
+
+
+__END__
+
+=head1 NAME
+
+vsoapc - vuser soap client
+
+=head1 SYNOPSIS
+
+ vsoapc --username=user [--password=pass] [--curses|keyword action [options]]
+
+=head1 DESCRIPTION
+
+=head1 AUTHOR
+
+Randy Smith <perlstalker@gmail.com>
+
+=head1 LICENSE
+ 
+ This file is part of vuser.
+ 
+ vuser is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ 
+ vuser is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with vuser; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+=cut
+

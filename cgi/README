@@ -1,0 +1,13 @@
+REQUIRES
+
+Text::Template
+SOAP::Lite
+Config::IniFiles
+
+CONFIGURATION
+
+Add to vuser.conf
+
+[vsoapc.cgi]
+# Defaults to ./templates/
+template dir=/path/to/templates

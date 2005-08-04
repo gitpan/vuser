@@ -1,0 +1,47 @@
+<html>
+ <head>
+  <title>{ $title }</title>
+ </head>
+ <body>
+  <p><a href="{ $url }">Home</a></p>
+  <p><a href="{ $url }?logout">Logout</a></p>
+  <h1>Choose an action.</h1>
+{
+    my $form_url = $url;
+    if ($keyword) {
+	$form_url .= "/$keyword";
+    }
+
+    if ($action) {
+	$form_url .= "/$action";
+    }
+
+    $OUT .= "<form action='$form_url' method='Post'>";
+}
+   <input type="hidden" name="session" value="{$session}" />
+   <select name="keyword">
+{
+    if ($keyword) {
+	$OUT .= "<option value='$keyword'>$keyword</option>";
+    } else {
+	foreach my $key (@keywords) {
+	    $OUT .= "<option value='$key->{keyword}'>$key->{keyword}</option>";
+	}
+    }
+}
+   </select>
+{
+    if (@actions) {
+	$OUT .= "<select name='action'>";
+	foreach my $act (@actions) {
+	    $OUT .= "<option value='$act->{action}'>$act->{action}</option> ";
+	}
+	$OUT .= "</select>";
+    }
+
+    $OUT .= '';
+}
+   <input type="submit" value="Next" />
+  </form>
+ </body>
+</html>
