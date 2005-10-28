@@ -1,4 +1,4 @@
-$Id: INSTALL,v 1.1 2005/06/01 15:36:26 perlstalker Exp $
+$Id: INSTALL,v 1.2 2005/08/26 15:17:34 perlstalker Exp $
 
 Required Modules:
 
@@ -27,3 +27,11 @@ or to install in /opt
 	perl Makefile.PL PREFIX=/opt
 
 The install script will create lib, share and sbin directories in PREFIX.
+
+If you install in a PREFIX that is not included in perl's default library
+paths, you will need to set PERL5LIB to include the new directory. For
+example, if you set PREFIX=/opt, you might add this to your .profile (or
+/etc/profile).
+
+	export PERL5LIB=/opt/lib/perl5/site_perl/
+

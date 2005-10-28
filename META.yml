@@ -1,11 +1,12 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         vuser
-version:      0.1.0
+version:      0.2.0
 version_from: sbin/vuser
 installdirs:  site
 requires:
     Config::IniFiles:              0
+    File::Path:                    0
     Regexp::Common:                0
 
 distribution_type: module

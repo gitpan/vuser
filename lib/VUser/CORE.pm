@@ -3,12 +3,12 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: CORE.pm,v 1.18 2005/07/02 21:04:04 perlstalker Exp $
+# $Id: CORE.pm,v 1.22 2005/10/28 04:27:29 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.18 $'))[1];
-our $VERSION = "0.1.0";
+our $REVISION = (split (' ', '$Revision: 1.22 $'))[1];
+our $VERSION = "0.2.0";
 
 use Pod::Usage;
 
@@ -57,8 +57,8 @@ sub version
     my $cfg = shift;
     my $opts = shift;
 
-    print ("Version: "0.1.0"\n");
-    return "0.1.0";
+    print ("Version: $VERSION\n");
+    return $VERSION;
 }
 
 sub revision
@@ -155,113 +155,9 @@ sub init
     $eh->register_keyword('version', 'Show version information.');
     $eh->register_action('version', '');
     $eh->register_task('version', '', \&version);
-
-    # Batch
-    $eh->register_keyword('batch', 'Run in batch mode.');
-    $eh->register_action('batch', '*', '');
-    $eh->register_option('batch', '*', 'flag', '=s', 0, 'touch this file when finished with the batch.');
-    $eh->register_task('batch', '*', \&batch_mode); 
 }
 
-sub process_event_dir
-{
-    my $cfg = shift;
-    my $opts = shift;
-    my $eh = shift;
-    my $dir = shift;
-
-    opendir DIR, $dir or die "Unable to open $dir: $!\n";
-    my @files = grep { ! (/^\.\.?$/
-			  or /^error-/
-			  or /^new-/
-			  )
-		      } readdir DIR;
-    closedir DIR;
-
-    foreach my $file (sort {
-	my @astat = stat("$dir/$a");
-	my @bstat = stat("$dir/$b");
-	$astat[9] <=> $bstat[9]; # Sort on mtime
-	} @files) {
-	if (-d "$dir/$file") {
-	    eval { process_event_dir($cfg, $opts, $eh, "$dir/$file"); };
-	    die $@ if $@;
-	} elsif (-f "$dir/$file") {
-	    eval { process_event_file($cfg, $opts, $eh, $dir, $file); };
-	    if ($@) {
-		warn $@;
-		rename "$dir/$file", "$dir/error-$file"
-		    or warn "Can't rename $dir/$file to error-$file: $!";
-	    }
-	} else {
-	    warn "File $dir/$file is not a plain file. Skipping.\n";
-	}
-    }
-}
-
-sub process_event_file
-{
-    my $cfg = shift;
-    my $opts = shift;
-    my $eh = shift;
-    my $dir = shift;
-    my $file = shift;
-
-    my ($keyword, $action, $garbage) = split ('-', $file);
-
-    my %opts = ();
-    open FILE, "$dir/$file" or die "Unable to open $dir/$file: $!";
-    while (<FILE>) {
-	chomp;
-	next unless /^\s*(\S+)\s*=>\s*(.*?)\s*$/;
-	my $key = $1;
-	my $val = $2;
-
-	if (not defined $opts{$key}) {
-	    $opts{$key} = $val;
-	} elsif (ref $opts{$key} eq 'SCALAR') {
-	    # We have hit a second option for this key.
-	    # Convert the value into a list
-	    $opts{$key} = [$opts{$key}, $val];
-	} elsif (ref $opts{$key} eq 'ARRAY') {
-	    # We have hit an Nth (N > 2) value for this key.
-	    # Add it to the list.
-	    push (@{$opts{$key}}, $val);
-	} else {
-	    # This should never happen.
-	    warn "Unknown error processing $file: We should never get here.";
-	    next;
-	}
-    }
-    close FILE;
-
-#    print STDERR "Keyword: $keyword; Action: $action; File: $file\n";
-#    use Data::Dumper; print Dumper \%opts;
-
-    # All the data has been read, time to run the task.
-    eval { $eh->run_tasks($keyword, $action, $cfg, %opts); };
-    die "$file: ".$@ if $@;
-
-    if ($opts->{flag}) {
-	eval { VUser::ExtLib::touch($opts->{flag}); };
-	die "$@\n" if $@;
-    }
-
-    unlink "$dir/$file";
-}
-
-sub batch_mode
-{
-    my $cfg = shift;
-    my $opts = shift;
-    my $directory = shift; # The 'action' for batch is the dir/file to process
-    my $eh = shift;
-
-    eval { process_event_dir($cfg, $opts, $eh, $directory); };
-    die $@ if $@;
-}
-
-sub unload { }
+sub unload { };
 
 1;
 

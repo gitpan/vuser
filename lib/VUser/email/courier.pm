@@ -1,7 +1,7 @@
 package VUser::email::courier;
 
 # Copyright 2005 Michael O'Connor <stew@vireo.org>
-# $Id: courier.pm,v 1.2 2005/07/02 21:04:06 perlstalker Exp $
+# $Id: courier.pm,v 1.5 2005/10/28 04:27:30 perlstalker Exp $
 
 use warnings;
 use strict;
@@ -9,8 +9,8 @@ use Pod::Usage;
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.2 $'))[1];
-our $VERSION = "0.1.0";
+our $REVISION = (split (' ', '$Revision: 1.5 $'))[1];
+our $VERSION = "0.2.0";
 
 use VUser::email::authlib;
 use VUser::email::driver;
@@ -92,6 +92,14 @@ sub get_user_info
     $self->{_authlib}->get_user_info( $account, $user );
 }
 
+sub get_users_for_domain
+{
+    my $self = shift;
+    my $domain = shift;
+
+    return $self->{_authlib}->get_users_for_domain($domain);
+}
+
 sub domain_add
 {
     my $self = shift;
@@ -99,6 +107,15 @@ sub domain_add
     my $domaindir = shift;
     
     return $self->{_authlib}->domain_add( $domain, $domaindir );
+}
+
+sub domain_del
+{
+    my $self = shift;
+    my $domain = shift;
+    my $domaindir = shift;
+
+    return $self->{_authlib}->domain_del( $domain, $domaindir );
 }
 
 sub add_user
@@ -112,3 +129,24 @@ sub add_user
 
     $self->{_authlib}->add_user( $account, $password, $userdir, $name );
 }
+
+sub mod_user
+{
+    my $self = shift;
+    my $account = shift;
+    my $password = shift;
+    my $name = shift;
+
+    $self->{_authlib}->mod_user($account, $password, $name);
+}
+
+sub rename_user
+{
+    my $self = shift;
+    my $account = shift;
+    my $new_account = shift;
+
+    $self->{_authlib}->rename_user($account, $new_account);
+}
+
+1;

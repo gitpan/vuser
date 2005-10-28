@@ -1,21 +1,34 @@
-package VUser::spamassassin.pm;
+package VUser::spamassassin;
 use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: spamassassin.pm,v 1.2 2005/07/02 21:04:05 perlstalker Exp $
+# $Id: spamassassin.pm,v 1.5 2005/10/28 04:27:29 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.2 $'))[1];
-our $VERSION = "0.1.0";
+our $REVISION = (split (' ', '$Revision: 1.5 $'))[1];
+our $VERSION = "0.2.0";
 
+use VUser::Meta;
+use VUser::ResultSet;
 use VUser::Extension;
 push @ISA, 'VUser::Extension';
 
 my %dbs = ('scores' => undef,
 	   'awl' => undef,
 	   'bayes' => undef);
+
+my %meta = ('username' => VUser::Meta->new(name => 'username',
+					   type => 'string',
+					   description => 'User name'),
+	    'option' => VUser::Meta->new (name => 'option',
+					  type => 'string',
+					  description => 'SA option'),
+	    'value' => VUser::Meta->new (name => 'value',
+					 type => 'string',
+					 description => 'Value for option')
+	    );
 
 sub config_sample
 {
@@ -60,7 +73,7 @@ bayes_password=
 
 CONFIG
     if (defined $opts->{file}) {
-	close CONF;
+	close $fh;
     }
 
 }
@@ -88,16 +101,16 @@ sub init
 	require DBI;
 	my $awl_user = VUser::ExtLib::strip_ws($cfg{Extension_spamassassin}{user_awl_username});
 	my $awl_pass = VUser::ExtLib::strip_ws($cfg{Extension_spamassassin}{user_awl_password});
-	$dbs{awl} = DBI->connect($scores_dsn, $scores_user, $scores_pass);
+	$dbs{awl} = DBI->connect($awl_dsn, $awl_user, $awl_pass);
 	die "Unable connect to database: ".DBI->errstr."\n" unless $dbs{awl};
     }
 
-    my $bayes_dns = VUser::ExtLib::strip_ws($cfg{Extension_spamassassin}{bayes_dsn});
+    my $bayes_dsn = VUser::ExtLib::strip_ws($cfg{Extension_spamassassin}{bayes_dsn});
     if ($bayes_dsn) {
 	require DBI;
 	my $bayes_user = VUser::ExtLib::strip_ws($cfg{Extension_spamassassin}{bayes_username});
 	my $bayes_pass = VUser::ExtLib::strip_ws($cfg{Extension_spamassassin}{bayes_password});
-	$dbs{bayes} = DBI->connect($scores_dsn, $scores_user, $scores_pass);
+	$dbs{bayes} = DBI->connect($bayes_dsn, $bayes_user, $bayes_pass);
 	die "Unable connect to database: ".DBI->errstr."\n" unless $dbs{bayes};
     }
 
@@ -106,34 +119,38 @@ sub init
     
     # SA-delall: Delete all options for a user.
     $eh->register_action('sa', 'delall');
-    $eh->register_option('sa',' delall', 'username', '=s', 1);
+    $eh->register_option('sa',' delall', $meta{'username'}, 1);
     $eh->register_task('sa', 'delall', \&sa_delall);
 
     # SA-add: add an option for a user.
     $eh->register_action('sa', 'add');
-    $eh->register_option('sa', 'add', 'username', '=s', 1);
-    $eh->register_option('sa', 'add', 'option', '=s', 1);
-    $eh->register_option('sa', 'add', 'value', '=s', 1);
+    $eh->register_option('sa', 'add', $meta{'username'}, 1);
+    $eh->register_option('sa', 'add', $meta{'option'}, 1);
+    $eh->register_option('sa', 'add', $meta{'value'}, 1);
     $eh->register_task('sa', 'add', \&sa_add);
 
     # SA-mod: modify a user's options
     $eh->register_action('sa', 'mod');
-    $eh->register_option('sa', 'mod', 'username', '=s', 1);
-    $eh->register_option('sa', 'mod', 'option', '=s', 1);
-    $eh->register_option('sa', 'mod', 'value', '=s');
-    $eh->register_option('sa', 'mod', 'delete');
+    $eh->register_option('sa', 'mod', $meta{'username'}, 1);
+    $eh->register_option('sa', 'mod', $meta{'option'}, 1);
+    $eh->register_option('sa', 'mod', $meta{'value'});
+    $eh->register_option('sa', 'mod',
+			 VUser::Meta->new(name => 'delete',
+					  type => 'boolean',
+					  description => 'Delete the option')
+			 );
     $eh->register_option('sa', 'mod', \&sa_mod);
 
     # SA-mod: delete an option for a user.
     $eh->register_action('sa', 'del');
-    $eh->register_option('sa',' del', 'username', '=s', 1);
-    $eh->register_option('sa', 'del', 'option', '=s', 1);
+    $eh->register_option('sa',' del', $meta{'username'}, 1);
+    $eh->register_option('sa', 'del', $meta{'option'}, 1);
     $eh->register_task('sa', 'del', \&sa_del);
 
     # SA-show: Show user settings
     $eh->register_action('sa', 'show');
-    $eh->register_option('sa', 'show', 'username', '=s');
-    $eh->register_option('sa', 'show', 'option', '=s');
+    $eh->register_option('sa', 'show', $meta{'username'});
+    $eh->register_option('sa', 'show', $meta{'option'});
     $eh->register_task('sa', 'show', \&sa_show);
 
     # Email
@@ -168,10 +185,147 @@ sub sa_add
     }
 }
 
-sub sa_mod {}
-sub sa_del {}
-sub sa_show {}
-sub sa_delall {}
+sub sa_mod
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $user = $opts->{username};
+    my $option = $opts->{option};
+    my $value = $opts->{value};
+    my $delete = $opts->{delete};
+
+    if ($delete) {
+	return sa_del($cfg, $opts, @_);
+    } else {
+	if ($dbs{scores}) {
+	    my $table = VUser::ExtLib::strip_ws($cfg->{Extension_spamassassin}{user_scores_table});
+	    my $sql = "update $table set value=? where username=? and preference = ?";
+	    my $sth = $dbs{scores}->prepare($sql)
+		or die "Database error: ".$dbs{scores}->errstr."\n";
+	    $sth->execute($value, $user, $option)
+		or die "Database error: ".$sth->errstr."\n";
+	} else {
+	    # File-based stuff
+	}
+    }
+}
+
+sub sa_del
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $user = $opts->{username};
+    my $option = $opts->{option};
+
+    if ($dbs{scores}) {
+	my $table = VUser::ExtLib::strip_ws($cfg->{Extension_spamassassin}{user_scores_table});
+	my $sql = "delete from $table where username=? and preference = ?";
+	my $sth = $dbs{scores}->prepare($sql)
+	    or die "Database error: ".$dbs{scores}->errstr."\n";
+	$sth->execute($user, $option)
+	    or die "Database error: ".$sth->errstr."\n";
+    } else {
+	# File-based stuff here.
+    }
+}
+
+sub sa_delall
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $user = $opts->{username};
+
+    # The email extension uses 'account' instead of 'username'
+    $user = $opts->{account} if not $user;
+
+    # Delete the preferences
+    if ($dbs{scores}) {
+	my $table = VUser::ExtLib::strip_ws($cfg->{Extension_spamassassin}{user_scores_table});
+	my $sql = "delete from $table where username=?";
+	my $sth = $dbs{scores}->prepare($sql)
+	    or die "Database error: ".$dbs{scores}->errstr."\n";
+	$sth->execute($user)
+	    or die "Database error: ".$sth->errstr."\n";
+    } else {
+	# file-based
+    }
+
+    # Delete the AWL entries
+    if ($dbs{awl}) {
+	my $table = VUser::ExtLib::strip_ws($cfg->{Extension_spamassassin}{user_awl_table});
+	my $sql = "delete from $table where username=?";
+	my $sth = $dbs{scores}->prepare($sql)
+	    or die "Database error: ".$dbs{scores}->errstr."\n";
+	$sth->execute($user)
+	    or die "Database error: ".$sth->errstr."\n";
+    } else {
+    }
+
+    # Delete Baysian DB
+    if ($dbs{bayes}) {
+	# There are quite a few tables we need to delete from.
+	# To start, we need to grab the id for the user.
+	my $sql = 'select id from bayes_vars where username = ?';
+	my $sth = $dbs{scores}->prepare($sql)
+	    or die "Database error: ".$dbs{scores}->errstr."\n";
+	$sth->execute($user)
+	    or die "Database error: ".$sth->errstr."\n";
+	my $res = $sth->fetchrow_hashref;
+	
+	if (defined $res) {
+	    my $id = $res->{id};
+
+	    # Delete everything for this user in each table.
+	    foreach my $table (qw(bayes_vars bayes_tokens bayes_seen
+				 bayes_expire)) {
+		$sql = "delete from $table where id=?";
+		my $sth = $dbs{scores}->prepare($sql)
+		    or die "Database error: ".$dbs{scores}->errstr."\n";
+		$sth->execute($user)
+		    or die "Database error: ".$sth->errstr."\n";
+	    }
+	}
+    } else {
+	# file-based stuff here.
+    }
+}
+
+sub sa_show
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $user = $opts->{username};
+    my $option = $opts->{option};
+
+    my $rs = VUser::ResultSet->new;
+    foreach my $meta_name (qw[username option value]) {
+	$rs->add_meta($meta{$meta_name});
+    }
+    
+    if ($dbs{'scores'}) {
+	$user = '%' unless $user;
+	$option = '%' unless $user;
+
+	my $table = VUser::ExtLib::strip_ws($cfg->{Extension_spamassassin}{user_scores_table});
+	my $sql = "select * from $table where username like ? and preference like ? order by username,preference";
+	my $sth = $dbs{scores}->prepare($sql)
+	    or die "Database error: ".$dbs{scores}->errstr."\n";
+	$sth->execute($user, $option)
+	    or die "Database error: ".$sth->errstr."\n";
+
+	my $res;
+	while (defined ($res = $sth->fetchrow_hashref)) {
+	    print join (':', $res->{username}, $res->{option}, $res->{value});
+	    print "\n";
+	    $rs->add_data([$res->{username}, $res->{option}, $res->{value}]);
+	}
+    }
+    return $rs;
+}
 
 1;
 

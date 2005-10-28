@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vsoapc,v 1.4 2005/07/02 20:19:09 perlstalker Exp $
+# $Id: vsoapc,v 1.6 2005/10/28 04:27:32 perlstalker Exp $
 
 use Getopt::Long qw(:config require_order);
 use FindBin;
@@ -18,8 +18,8 @@ use SOAP::Lite
 		     die "Error: ", ref $res ? $res->faultstring : $soap->transport->status, "\n"
 		     };
 
-our $REVISION = (split (' ', '$Revision: 1.4 $'))[1];
-our $VERSION = '0.1.0';
+our $REVISION = (split (' ', '$Revision: 1.6 $'))[1];
+our $VERSION = "0.2.0";
 
 our $DEBUG = 0;
 
@@ -33,6 +33,7 @@ BEGIN {
 		     "$FindBin::Bin",
 		     "$FindBin::Bin/..",
                      "$FindBin::Bin/vuser",
+                     "$FindBin::Bin/../vuser",
                      "$FindBin::Bin/../etc/vuser"
                      );
 }

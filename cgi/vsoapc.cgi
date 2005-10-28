@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith
-# $Id: vsoapc.cgi,v 1.6 2005/06/27 17:26:31 perlstalker Exp $
+# $Id: vsoapc.cgi,v 1.7 2005/10/28 04:27:29 perlstalker Exp $
 
 # Called as:
 #  vsoapc.cgi/keyword/action/
@@ -17,8 +17,8 @@ use FindBin;
 use CGI;
 use CGI::Carp qw/fatalsToBrowser/;
 
-our $REVISION = (split (' ', '$Revision: 1.6 $'))[1];
-our $VERSION = '0.1.0';
+our $REVISION = (split (' ', '$Revision: 1.7 $'))[1];
+our $VERSION = "0.2.0";
 
 my $title = "vuser $VERSION - $REVISION";
 

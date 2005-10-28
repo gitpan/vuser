@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith <perlstalker@gmail.com>
-# $Id: Meta.pm,v 1.2 2005/05/25 04:08:27 perlstalker Exp $
+# $Id: Meta.pm,v 1.3 2005/09/15 17:05:18 perlstalker Exp $
 
 sub new
 {
@@ -79,7 +79,32 @@ __END__
 
 VUser::Meta - Meta data for options.
 
+=head1 SYNOPSIS
+
+ my $meta = VUser::Meta->new('name' => 'foo',
+                             'type' => 'string',
+                             'description' => 'The value of foo');
+
 =head1 DESCRIPTION
+
+VUser::Meta objects are used in to describe options and return data
+from Extensions.
+
+=head2 Allowed types
+
+=over 4
+
+=item integer (int)
+
+=item string
+
+=item counter
+
+Used for options rather than result sets.
+
+=item boolean
+
+=item float
 
 =head1 AUTHOR
 

@@ -4,12 +4,12 @@ use warnings;
 use strict;
 
 # Copyright 2004 Mike O'Connor <stew@vireo.org>
-# $Id: bind.pm,v 1.3 2005/07/02 21:04:05 perlstalker Exp $
+# $Id: bind.pm,v 1.4 2005/10/28 04:27:29 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.3 $'))[1];
-our $VERSION = "0.1.0";
+our $REVISION = (split (' ', '$Revision: 1.4 $'))[1];
+our $VERSION = "0.2.0";
 
 use Pod::Usage;
 

@@ -3,10 +3,10 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: ExtHandler.pm,v 1.31 2005/07/02 21:04:04 perlstalker Exp $
+# $Id: ExtHandler.pm,v 1.34 2005/10/28 04:27:29 perlstalker Exp $
 
-our $REVISION = (split (' ', '$Revision: 1.31 $'))[1];
-our $VERSION = "0.1.0";
+our $REVISION = (split (' ', '$Revision: 1.34 $'))[1];
+our $VERSION = "0.2.0";
 
 use lib qw(..);
 use Getopt::Long;
@@ -15,6 +15,8 @@ use VUser::Meta;
 
 use Regexp::Common qw /number/;
 #use Regexp::Common qw /number RE_ALL/;
+
+sub DEFAULT_PRIORITY { 10; }
 
 sub new
 {
@@ -240,7 +242,14 @@ sub register_task
 	die "Unable to register task on unknown action '$action'.\n";
     }
 
-    $priority = 10 unless defined $priority; # Default priority is 10.
+    # Default priority is 10.
+    $priority = DEFAULT_PRIORITY unless defined $priority;
+    if ($priority =~ /^[+-]\s*\d+/) {
+	$priority =~ s/\s//g; # remove any excess whitespace
+	$priority = DEFAULT_PRIORITY() + $priority;
+	$priority = 0 if $priority < 0;
+    }
+
     if (defined $self->{keywords}{$keyword}{$action}{tasks}[$priority]) {
 	push @{$self->{keywords}{$keyword}{$action}{tasks}[$priority]}, $handler;
     } else {
@@ -577,6 +586,12 @@ __END__
 ExtHandler - vuser extension handler.
 
 =head1 DESCRIPTION
+
+=head2 register_keyword
+
+=head2 register_action
+
+=head2 register_task
 
 =head1 AUTHOR
 

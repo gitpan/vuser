@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith
-# $Id: ResultSet.pm,v 1.3 2005/06/27 17:26:44 perlstalker Exp $
+# $Id: ResultSet.pm,v 1.6 2005/09/15 17:05:18 perlstalker Exp $
 
 use VUser::Meta;
 
@@ -61,6 +61,8 @@ sub sort_results
 
     my $order_by = $options{order_by} || $self->{order_by};
     my $sort_order = $options{sort_order} || $self->{sort_order};
+
+    $order_by = $self->{meta}[0]->name unless defined $order_by;
 
     $order_by = undef if not defined $self->{colmap}{$order_by};
     $sort_order = 'asc' if ($sort_order ne 'asc' or $sort_order ne 'des');
@@ -276,7 +278,8 @@ result set methods:
 
  order_by($meta->name, asc|des); sets the sort order for results*()
 
-== Accumulator interface (do later)
+=head2 Accumulator interface (do later)
+
  reset(); reset current pointer to the beginning of the list
 
  sort($meta->name, asc|des); sort values by given column. Resets pointer
@@ -295,6 +298,11 @@ How to add data to result set?
  add_meta(VUser::Meta)
  add_data([value1, value2, ...])
  add_data({meta1->name => value1, meta2->name => value2, ...})
+
+=head1 BUGS
+
+There are currently no checks to verify that the data added with add_data()
+matches the data type specified with add_meta().
 
 =head1 AUTHOR
 

@@ -5,14 +5,14 @@ use strict;
 
 # Copyright 2005 Michael O'Connor <stew@vireo.org>
 # Copyright 2004 Randy Smith
-# $Id: email.pm,v 1.3 2005/07/02 21:04:05 perlstalker Exp $
+# $Id: email.pm,v 1.6 2005/10/28 04:27:29 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.3 $'))[1];
-our $VERSION = "0.1.0";
+our $REVISION = (split (' ', '$Revision: 1.6 $'))[1];
+our $VERSION = "0.2.0";
 
-use VUser::ExtLib qw( mkdir_p );
+use VUser::ExtLib qw( mkdir_p rm_r );
 
 use Pod::Usage;
 
@@ -106,6 +106,15 @@ sub init
     $eh->register_action('email', 'add');
     $eh->register_task('email', 'add', \&email_add, 0);
     $eh->register_option('email', 'add', 'account', '=s', "required" );
+    $eh->register_option('email', 'add', 'password', '=s', "required", "Account password" );
+    $eh->register_option('email', 'add', 'name', '=s', 0, "Real name" );
+
+    $eh->register_action('email', 'mod', 'Modify an email account');
+    $eh->register_task('email', 'mod', \&email_mod, 0);
+    $eh->register_option('email', 'mod', 'account', '=s', 'required', 'Account name');
+    $eh->register_option('email', 'mod', 'password', '=s', 0, "Account password" );
+    $eh->register_option('email', 'mod', 'name', '=s', 0, "Real name" );
+    $eh->register_option('email', 'mod', 'newaccount', '=s', 0, "New Account name");
 
     $eh->register_action('email', 'del');
     $eh->register_task('email', 'del', \&email_del, 0);
@@ -118,6 +127,10 @@ sub init
     $eh->register_action('email', 'adddomain');
     $eh->register_task('email', 'adddomain', \&domain_add, 0);
     $eh->register_option( 'email', 'adddomain', 'domain', '=s', 'required' );
+
+    $eh->register_action('email', 'deldomain');
+    $eh->register_task('email', 'deldomain', \&domain_del, 0);
+    $eh->register_option( 'email', 'deldomain', 'domain', '=s', 'required' );
 
     $eh->register_action('email', 'listdomains');
     $eh->register_task('email', 'listdomains', \&list_domains, 0);
@@ -167,6 +180,30 @@ sub domain_add
     die "domain already exists: $domain" if( $driver->domain_exists($domain) );
 
     $driver->domain_add( $domain, get_domain_directory( $cfg, $domain ) );
+}
+
+sub domain_del
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $domain = $opts->{domain};
+
+    die "domain does not exist: $domain\n" unless ($driver->domain_exists($domain));
+
+    # Delete all user accounts.
+    # Get emails
+    my @users = $driver->get_users_for_domain($domain);
+    foreach my $user (@users) {
+	#use Data::Dumper; print Dumper $user;
+	email_del($cfg,
+		  {'account' => $user->{id}},
+		  @_);
+    }
+
+    # Delete the domain.
+    my $domaindir = get_domain_directory( $cfg, $domain );
+    $driver->domain_del($domain, $domaindir);
 }
 
 sub list_domains
@@ -243,6 +280,47 @@ sub email_add
 
 }
 
+sub email_mod
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $account = $opts->{account};
+
+    my $old_user;
+    my $old_domain;
+    split_address( $cfg, $account, \$old_user, \$old_domain);
+
+    die "account must be in form user\@domain" if( !$old_user );
+    die "account must be in form user\@domain" if( !$old_domain );
+
+    if ($opts->{password} or $opts->{name}) {
+	$driver->mod_user($account,
+			  $opts->{password},
+			  $opts->{name});
+    }
+
+    my $new_account = $opts->{newaccount};
+    if ($new_account and $new_account ne $account) {
+	die "Account $new_account exists\n" if $driver->user_exists($new_account);
+	# User is changing the email address for the account.
+	my $new_user;
+	my $new_domain;
+	split_address( $cfg, $new_account, \$new_user, \$new_domain);
+	die "newaccount must be in form user\@domain" if( !$new_user );
+	die "newaccount must be in form user\@domain" if( !$new_domain );
+
+	my $old_userdir = get_home_directory($cfg, $old_user, $old_domain);
+	my $new_userdir = get_home_directory($cfg, $new_user, $new_domain);
+	print "Old: $old_userdir\n";
+	print "New: $new_userdir\n";
+	VUser::ExtLib::mvdir($old_userdir, $new_userdir);
+
+	$driver->rename_user($account, $new_account);
+    }
+
+}
+
 sub email_del
 {
     my $cfg = shift;
@@ -260,9 +338,9 @@ sub email_del
     die "account must be in form user\@domain" if( !$domain );
 
     my $userdir = get_home_directory( $cfg, $user, $domain );
-    system ('rm', '-r', "$userdir");
+    rm_r ("$userdir");
 
-    $driver->del_user( $opts->{$account} )
+    $driver->del_user( $account );
 
 }
 
@@ -311,9 +389,10 @@ email - vuser email support extension
 
 =head1 DESCRIPTION
 
-=head1 AUTHOR
+=head1 AUTHORS
 
 Mike O'Connor <stew@vireo.org>
+Randy Smith <perlstalker@vuser.org>
 
 =head1 LICENSE
  
