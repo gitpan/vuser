@@ -3,15 +3,15 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: ACL.pm,v 1.8 2005/10/28 04:27:29 perlstalker Exp $
+# $Id: ACL.pm,v 1.9 2006/01/04 21:57:48 perlstalker Exp $
 
 use Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(ALLOW DENY UNKNOWN);
 our %EXPORT_TAGS = (consts => [qw(ALLOW DENY UNKNOWN)]);
 
-our $REVISION = (split (' ', '$Revision: 1.8 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.9 $'))[1];
+our $VERSION = "0.3.0";
 
 our $ALLOW = 1;
 our $DENY = 0;

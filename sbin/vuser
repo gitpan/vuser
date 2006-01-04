@@ -6,19 +6,15 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vuser,v 1.7 2005/10/28 04:27:32 perlstalker Exp $
+# $Id: vuser,v 1.14 2006/01/04 21:57:49 perlstalker Exp $
 
 use Pod::Usage;
-use Getopt::Long;
+use Getopt::Long qw(:config require_order);
 use FindBin;
 use Config::IniFiles;
 
-use VUser::ResultSet;
-use VUser::Meta;
-use VUser::ExtLib qw(strip_ws check_bool);
-
-our $REVISION = (split (' ', '$Revision: 1.7 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.14 $'))[1];
+our $VERSION = "0.3.0";
 
 our $DEBUG = 0;
 
@@ -43,13 +39,26 @@ use lib (map { "$_/extensions" } @etc_dirs);
 use lib (map { "$_/lib" } @etc_dirs);
 
 use VUser::ExtHandler;
+use VUser::ResultSet;
+use VUser::Meta;
+use VUser::ExtLib qw(strip_ws check_bool);
+use VUser::Log qw(:levels);
 
 my $config_file;
-for my $etc_dir (@etc_dirs)
+my $result = GetOptions( "config=s" => \$config_file );
+
+if( defined $config_file )
 {
-    if (-e "$etc_dir/vuser.conf") {
-	$config_file = "$etc_dir/vuser.conf";
-	last;
+    die "FATAL: config file: $config_file not found" unless( -e $config_file );
+}
+else
+{
+    for my $etc_dir (@etc_dirs)
+    {
+	if (-e "$etc_dir/vuser.conf") {
+	    $config_file = "$etc_dir/vuser.conf";
+	    last;
+	}
     }
 }
 
@@ -62,7 +71,10 @@ tie %cfg, 'Config::IniFiles', (-file => $config_file);
 
 $DEBUG = check_bool $cfg{'vuser'}{'debug'};
 
+our $log = VUser::Log->new(\%cfg, 'vuser');
 my $eh = new VUser::ExtHandler (\%cfg);
+
+$log->log(LOG_DEBUG, "Config loaded from $config_file");
 
 my $keyword = shift @ARGV || 'help';
 my $action = shift @ARGV;
@@ -77,6 +89,7 @@ if (defined $action
 $action = '' unless defined $action;
 
 # Ok. Now it's time to do the action.
+$log->log(LOG_NOTICE, "Running %s %s", $keyword, $action);
 my @rs;
 eval { @rs = $eh->run_tasks($keyword, $action, \%cfg); };
 warn $@ if $@;
@@ -99,8 +112,9 @@ if (check_bool($cfg{'vuser'}{'show result set'}) and @rs) {
 		for (my $i = 0; $i < @meta; $i++) {
 		    printf("%s: %s\n",
 			   $meta[$i]->name,
-			   $row->[$i]);
+			   defined $row->[$i]? $row->[$i] : 'undef');
 		}
+		print "\n";
 	    }
 	}
     }
@@ -123,9 +137,11 @@ vuser - Virtual user management utility
 
 =head1 SYNOPSIS
 
-vuser module action [options]
+vuser [--config=/path/to/vuser.conf] module action [options]
 
 =head1 OPTIONS
+
+See 'vuser help module' for a list of actions and options.
 
 =head1 DESCRIPTION
 

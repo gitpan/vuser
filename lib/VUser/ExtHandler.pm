@@ -3,20 +3,23 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: ExtHandler.pm,v 1.34 2005/10/28 04:27:29 perlstalker Exp $
+# $Id: ExtHandler.pm,v 1.42 2006/01/04 21:57:48 perlstalker Exp $
 
-our $REVISION = (split (' ', '$Revision: 1.34 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.42 $'))[1];
+our $VERSION = "0.3.0";
 
 use lib qw(..);
 use Getopt::Long;
 use VUser::ExtLib;
 use VUser::Meta;
+use VUser::Log qw(:levels);
 
 use Regexp::Common qw /number/;
 #use Regexp::Common qw /number RE_ALL/;
 
 sub DEFAULT_PRIORITY { 10; }
+
+my $log;
 
 sub new
 {
@@ -24,6 +27,20 @@ sub new
     my $self = shift;
     my $class = ref($self) || $self;
     my $cfg = shift;
+    $log = shift;
+
+    if (not defined $log
+	and defined $main::log
+	and UNIVERSAL::isa($main::log, 'VUser::Log')
+	) {
+	$log = $main::log;
+    } elsif (defined $log
+	     and UNIVERSAL::isa($log, 'VUser::Log')
+	     ) {
+	# noop
+    } else {
+	$log = VUser::Log->new($cfg, 'vuser/eh');
+    }
 
     # {keyword}{action}{tasks}[order][tasks (sub refs)]
     # {keyword}{action}{options}{option} = type
@@ -96,6 +113,8 @@ sub register_option
 	my $descr = shift;
 	my $widget = shift;     # Widget class (Optional)
 
+	$log->log(LOG_DEBUG, "Reg option for $keyword|$action: $option");
+
 	if ($self->{$keyword}{'_meta'}{$option}) {
 	    $meta = $self->{$keyword}{'_meta'}{$option};
 	} else {
@@ -131,14 +150,19 @@ sub register_option
 				    );
 	}
 
-    } elsif ($option->isa('VUser::Meta')) {
+    } elsif (UNIVERSAL::isa($option, 'VUser::Meta')) {
 	$meta = $option;
 	$required = shift;
     } else {
-	die "Option was not a VUser::Meta\n";
+	if ($main::DEBUG) {
+	    use Data::Dumper; print Dumper $option;
+	}
+	die "Option on $keyword|$action was not a VUser::Meta\n";
     }
 
-    print STDERR "Reg Opt: $keyword|$action ".$meta->name." ".$meta->type." ", $required?'Req':'',"\n" if $main::DEBUG >= 2;
+    $log->log(LOG_DEBUG, "Reg Opt: $keyword|$action %s %s %s",
+	      $meta->name, $meta->type, $required?'Req':'');
+
     unless (exists $self->{keywords}{$keyword}) {
 	die "Unable to register option on unknown keyword '$keyword'.\n";
     }
@@ -264,6 +288,18 @@ sub get_keywords
     return sort keys %{ $self->{keywords}};
 }
 
+sub is_keyword
+{
+    my $self = shift;
+    my $keyword = shift;
+
+    if (defined $self->{keywords}{$keyword}) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
 sub get_actions
 {
     my $self = shift;
@@ -324,25 +360,18 @@ sub load_extensions
     my $self = shift;
     my %cfg = @_;
 
-    print STDERR "Loading CORE\n" if $main::DEBUG >= 1;
-    $self->load_extension('VUser::CORE');
+    $self->{'_loaded'} = {};
+
+    $self->load_extension('CORE');
     my $exts = $cfg{ vuser }{ extensions };
     $exts = '' unless $exts;
     VUser::ExtLib::strip_ws($exts);
-    print STDERR "extensions: $exts\n" if $main::DEBUG >= 1;
+    $log->log(LOG_DEBUG, "Cfg extensions: $exts");
     foreach my $extension (split( / /, $exts))
     {
-	print STDERR "Loading $extension\n" if $main::DEBUG >= 1;
-	eval { $self->load_extension( "VUser::$extension", %cfg); };
-	warn "Unable to load $extension: $@\n" if $@;
+	eval { $self->load_extension( $extension, %cfg ); };
+	$log->log(LOG_DEBUG, "Unable to load %s: %s", $extension, $@) if $@;
     }
-    
-#     foreach my $key (grep { /^Extension_/ } keys %$cfg) {
-#  	my $extension = $key =~ s/^Extension_//;
-# 	print( "extension: $key\n" );
-#  	eval { $self->load_extension($key, $cfg); };
-#  	warn "Unable to load $extension: $@\n" if $@;
-#     }
 }
 
 sub load_extension
@@ -351,15 +380,35 @@ sub load_extension
     my $ext = shift;
     my %cfg = @_;
 
-    my $pm = $ext;
-    $pm =~ s/::/\//g;
-    $pm .= ".pm";
-       
-    eval( "require $ext" );
+    my $pm = 'VUser::'.$ext; # Module name
+
+    # Don't load an extensions we've already seen.
+    if ($self->{'_loaded'}{$ext}) {
+	$log->log(LOG_INFO, "$ext is already loaded. Skipping");
+	return;
+    }
+
+    # Import the extention module
+    eval( "require $pm" );
     die $@ if $@;
     no strict "refs";
-    
-    &{$ext.'::init'}($self, %cfg);
+
+    # Check for module dependencies
+    $log->log(LOG_DEBUG, "Checking dependencies for %s", $ext);    
+    if ($pm->can('depends')) {
+	my @depends = ();
+	@depends = $pm->depends();
+
+	foreach my $depend (@depends) {
+	    next if not $depend; # Should not happen but let's be careful
+	    $log->log(LOG_INFO, "$ext depends on $depend");
+	    eval { $self->load_extension($depend, %cfg); };
+	    die "Unable to load dependency $depend: $@\n" if $@;
+	}
+    }
+       
+    $log->log(LOG_INFO, "Loading extension: $ext");
+    &{$pm.'::init'}($self, %cfg);
 }
 
 sub unload_extensions
@@ -367,14 +416,9 @@ sub unload_extensions
     my $self = shift;
     my %cfg = @_;
 
-    $self->unload_extension('VUser::CORE');
-    my $exts = $cfg{ vuser }{ extensions };
-    $exts = '' unless $exts;
-    VUser::ExtLib::strip_ws($exts);
-    foreach my $extension (split( / /, $exts))
-    {
-	eval { $self->unload_extension( "VUser::$extension", %cfg); };
-	warn "Unable to unload $extension: $@\n" if $@;
+    foreach my $ext (keys %{ $self->{'_loaded'} }) {
+	eval { $self->unload_extension($ext, %cfg); };
+	warn "Unable to unload $ext: $@\n" if $@;
     }
 }
 
@@ -384,8 +428,10 @@ sub unload_extension
     my $ext = shift;
     my %cfg = @_;
 
+    my $pm = 'VUser::'.$ext;
+
     no strict ('refs');
-    &{$ext.'::unload'}($self, %cfg);
+    &{$pm.'::unload'}($self, %cfg);
 }
 
 sub run_tasks
@@ -397,7 +443,8 @@ sub run_tasks
 
     my %opts = @_;
 
-    print "Keyword: '$keyword'\nAction: '$action'\nARGV: @ARGV\n" if $main::DEBUG >= 1;
+    $log->log(LOG_DEBUG,"Keyword: '$keyword' Action: '$action' ARGV: @ARGV");
+
     if ($main::DEBUG >= 1) {
 	print "Options: ";
 	use Data::Dumper; print Dumper \%opts;
@@ -457,13 +504,12 @@ sub run_tasks
 		my $d_type = $2;
 		my $dest_type = $3;
 
-		if ($main::DEBUG > 2) {
-		    print "Key: $keyword; Act: $real_action, Opt: $opt; Type: $type d_type: $d_type\n";
-		    print "Req: ";
-		    print $self->is_required($keyword, $real_action, $opt)? 'Yes':'No';
-		    print " ";
-		    print "Def: ",defined $opts{$opt}?"Yes ($opts{$opt})":'No',"\n";
-		}
+		$log->log(LOG_DEBUG, "Key: %s; Act: %s, Opt: %s; Type: %s d_type: %s",
+			  $keyword, $real_action, $opt, $type, $d_type);
+		$log->log(LOG_DEBUG, "Req: %s Def: %s",
+			  $self->is_required($keyword, $real_action, $opt)? 'Yes':'No',
+			  defined $opts{$opt}?"Yes ($opts{$opt})":'No'
+			  );
 
 		if ($d_type eq 's') {
 		    # There's nothing to verify here
@@ -535,7 +581,7 @@ sub run_tasks
 	    push @opt_defs, $def;
 	}
 	
-	print "Opt defs: @opt_defs\n" if $main::DEBUG >= 1;
+	$log->log(LOG_DEBUG, "Opt defs: @opt_defs");
 	if (@opt_defs) {
 	    GetOptions(\%opts, @opt_defs);
 	}

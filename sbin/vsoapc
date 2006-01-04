@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vsoapc,v 1.6 2005/10/28 04:27:32 perlstalker Exp $
+# $Id: vsoapc,v 1.8 2006/01/04 21:57:49 perlstalker Exp $
 
 use Getopt::Long qw(:config require_order);
 use FindBin;
@@ -18,8 +18,8 @@ use SOAP::Lite
 		     die "Error: ", ref $res ? $res->faultstring : $soap->transport->status, "\n"
 		     };
 
-our $REVISION = (split (' ', '$Revision: 1.6 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.8 $'))[1];
+our $VERSION = "0.3.0";
 
 our $DEBUG = 0;
 
@@ -48,21 +48,6 @@ use lib (map { "$_/lib" } @etc_dirs);
 use VUser::Meta;
 
 my $config_file;
-for my $etc_dir (@etc_dirs)
-{
-    if (-e "$etc_dir/vuser.conf") {
-	$config_file = "$etc_dir/vuser.conf";
-	last;
-    }
-}
-
-if (not defined $config_file) {
-    die "Unable to find a vuser.conf file in ".join (", ", @etc_dirs).".\n";
-}
-
-my %cfg;
-tie %cfg, 'Config::IniFiles', (-file => $config_file);
-
 my $username = '';
 my $password = undef;
 my $curses = 0;
@@ -72,8 +57,31 @@ my $version = 0;
 GetOptions('username|u=s' => \$username,
 	   'password|p=s' => \$password,
 	   'curses'       => \$curses,
-	   'version'      => \$version
+	   'version'      => \$version,
+	   'config=s'     => \$config_file
 	   );
+
+if( defined $config_file )
+{
+    die "FATAL: config file: $config_file not found" unless( -e $config_file );
+}
+else
+{
+    for my $etc_dir (@etc_dirs)
+    {
+	if (-e "$etc_dir/vuser.conf") {
+	    $config_file = "$etc_dir/vuser.conf";
+	    last;
+	}
+    }
+}
+
+if (not defined $config_file) {
+    die "Unable to find a vuser.conf file in ".join (", ", @etc_dirs).".\n";
+}
+
+my %cfg;
+tie %cfg, 'Config::IniFiles', (-file => $config_file);
 
 pod2usage("Missing option --username") unless $username;
 

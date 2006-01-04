@@ -4,15 +4,18 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith
-# $Id: SOAP.pm,v 1.17 2005/10/28 04:27:29 perlstalker Exp $
+# $Id: SOAP.pm,v 1.19 2006/01/04 21:57:48 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.17 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.19 $'))[1];
+our $VERSION = "0.3.0";
 
 our %cfg;
 our $eh;
+
+use VUser::Log qw(:levels);
+my $log;
 
 use VUser::ACL;
 my $acl;
@@ -25,10 +28,12 @@ sub init
     $acl = new VUser::ACL (\%cfg);
     $acl->load_auth_modules(\%cfg);
     $acl->load_acl_modules(\%cfg);
+
+    $log = $main::log;
 }
 
 sub version {
-    return "0.1.0";
+    return $VERSION;
 }
 
 sub hash_test {
@@ -67,20 +72,6 @@ sub get_data
     my $data = $pkg->$func(\%cfg, $opts);
     #use Data::Dumper; print Dumper $data;
     return $data;
-}
-
-sub get_data2
-{
-    my $class = shift;
-    my $user = shift;
-    my $pass = shift;
-    my $ip = shift;
-    my $keyword = shift;
-    my $opts = shift;
-
-    # Check ACLs
-    # Special flag for action?
-    check_acl(\%cfg, $user, $pass, $ip, $keyword, undef, $opts);
 }
 
 # Get a list of keywords for a soap client.
@@ -192,16 +183,22 @@ sub check_acl
     my $opts = shift;
 
     if (not $acl->auth_user(\%cfg, $user, $pass, $ip)) {
+	$log->log(LOG_NOTICE, "Failed login for %s: %s %s",
+		  $user, $keyword, $action);
 	die "Bad user name or password.";
     }
 
     # Check ACLs
     if (not $acl->check_acls(\%cfg, $user, $ip, $keyword)) {
+	$log->log(LOG_NOTICE, "Permission denined for %s: %s",
+		  $user, $keyword);
 	die "Permission denied for $user on $keyword";
     }
 
     if ($action
 	and not $acl->check_acls(\%cfg, $user, $ip, $keyword, $action)) {
+	$log->log(LOG_NOTICE, "Permission denied for %s: %s %s",
+		  $user, $keyword, $action);
 	die "Permission denied for $user on $keyword - $action";
     }
 
@@ -212,6 +209,8 @@ sub check_acl
 				     $keyword, $action,
 				     $key, $opts->{$key}
 				     )) {
+		$log->log(LOG_NOTICE, "Permission denied for %s: %s %s - %s",
+			  $user, $keyword, $action, $key);
 		die "Permission denied for $user on $keyword - $action - $key";
 	    }
 	}
@@ -268,6 +267,8 @@ sub run_tasks
 	    -> faultcode('Server.Custom')
 	    -> faultstring($@);
     }
+
+    $log->log(LOG_NOTICE, "Running %s %s for %s", $keyword, $action, $user);
 
     my $rs = [];
     eval { $rs = $eh->run_tasks($keyword, $action, \%cfg, %opts); };

@@ -3,10 +3,10 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: Extension.pm,v 1.3 2005/10/28 04:27:29 perlstalker Exp $
+# $Id: Extension.pm,v 1.5 2006/01/04 21:57:48 perlstalker Exp $
 
-our $REVISION = (split (' ', '$Revision: 1.3 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.5 $'))[1];
+our $VERSION = "0.3.0";
 
 sub revision
 {
@@ -39,6 +39,11 @@ Extension - vuser extension super class
 =head1 DESCRIPTION
 
 =head1 METHODS
+
+=head2 depends
+
+This optional function should return a list of extensions that it
+depends on. These extensions will be loaded first.
 
 =head2 init
 

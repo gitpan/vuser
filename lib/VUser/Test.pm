@@ -3,14 +3,17 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: Test.pm,v 1.3 2005/10/28 04:27:29 perlstalker Exp $
+# $Id: Test.pm,v 1.5 2006/01/04 21:57:48 perlstalker Exp $
 
-our $REVISION = (split (' ', '$Revision: 1.3 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.5 $'))[1];
+our $VERSION = "0.3.0";
 
 use vars qw(@ISA);
 use VUser::Extension;
+use VUser::Log qw(:levels);
 push @ISA, 'VUser::Extension';
+
+my $log;
 
 sub revision
 {
@@ -32,6 +35,8 @@ sub init
 {
     my $eh = shift;
     my %cfg = @_;
+
+    $log = $main::log;
 
     my %meta = ('foo', VUser::Meta->new(name => 'foo',
 					description => 'Random option',
@@ -60,6 +65,8 @@ sub test_task
 
     print "This is only a test. action $action\n";
     use Data::Dumper; print Dumper $opts;
+    
+    $log->log(LOG_NOTICE, "Testing action %s", $action);
 }
 
 sub dump_meta

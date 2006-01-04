@@ -3,12 +3,12 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: Batch.pm,v 1.2 2005/10/28 04:27:29 perlstalker Exp $
+# $Id: Batch.pm,v 1.3 2006/01/04 21:57:48 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.2 $'))[1];
-our $VERSION = "0.2.0";
+our $REVISION = (split (' ', '$Revision: 1.3 $'))[1];
+our $VERSION = "0.3.0";
 
 use Pod::Usage;
 

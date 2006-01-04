@@ -2,10 +2,11 @@ package VUser::ExtLib;
 use warnings;
 use strict;
 
-# Copyright 2004 Randy Smith
-# $Id: ExtLib.pm,v 1.14 2005/10/28 04:27:29 perlstalker Exp $
 
-our $VERSION = "0.2.0";
+# Copyright 2004 Randy Smith
+# $Id: ExtLib.pm,v 1.20 2006/01/04 21:57:48 perlstalker Exp $
+
+our $VERSION = "0.3.0";
 
 use Exporter;
 our @ISA = qw(Exporter);
@@ -15,13 +16,15 @@ our @EXPORT_OK = qw(add_line_to_file chown_ug check_bool
 		    del_line_from_file edit_warning
 		    generate_password mkdir_p repl_line_in_file
 		    rm_r run_scripts_in_dir strip_ws touch
+		    get_file_scp send_file_scp run_cmd_ssh
 		    );
 our %EXPORT_TAGS = (
 		    config => [qw(check_bool strip_ws)],
 		    files => [qw(add_line_to_file chown_ug
 				 del_line_from_file
 				 repl_line_in_file
-				 rm_r mkdir_p touch)]
+				 rm_r mkdir_p touch)],
+		    ssh => [qw(get_file_scp send_file_scp run_cmd_ssh)]
 		    );
 
 sub version { $VERSION };
@@ -235,6 +238,67 @@ sub touch
 	close FILE;
     }
     utime($time, $time, $file) or die "Unable to change time on $file: $!\n";
+}
+
+sub get_file_scp
+{
+    my ($user, $host, $key, $remote_file, $local_file, @opts) = @_;
+
+    my $exists = run_cmd_ssh ($user, $host, $key, "test -e $remote_file");
+    if ($exists != 0) {
+        run_cmd_ssh ($user, $host, $key, "touch $remote_file");
+    }
+
+    my $rc = system ('scp', '-q', '-i', $key, @opts,
+		     sprintf ('%s@%s:%s', $user, $host, $remote_file),
+		     $local_file);
+    if ($rc == -1) {
+	die "Unable to run 'scp': $!";
+    }
+    $rc >>= 8;
+    if ($rc > 0) {
+	die "Error getting file. scp returned $rc\n";
+    }
+
+    return;
+}
+
+sub send_file_scp
+{
+    my ($user, $host, $key, $local_file, $remote_file, @opts) = @_;
+
+    my $rc = system ('scp', '-q', '-i', $key, @opts,
+		     $local_file,
+		     sprintf ('%s@%s:%s', $user, $host, $remote_file),
+		     );
+    if ($rc == -1) {
+	die "Unable to run 'scp': $!";
+    }
+    $rc >>= 8;
+    if ($rc > 0) {
+	die "Error putting file. scp returned $rc\n";
+    }
+
+    return;
+}
+
+sub run_cmd_ssh
+{
+    my ($user, $host, $key, $cmd, @ssh_opts) = @_;
+
+    die "No command specified" unless defined $cmd;
+
+    my $rc = system ('ssh', '-i', $key, @ssh_opts,
+		     '-l', $user, $host, $cmd);
+    if ($rc == -1) {
+	die "Unable to run 'ssh': $!";
+    }
+    $rc >>= 8;
+    if ($rc == 255) {
+	die "Error running command. ssh returned $rc\n";
+    }
+
+    return $rc;
 }
 
 1;
