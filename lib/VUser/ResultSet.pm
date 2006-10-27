@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith
-# $Id: ResultSet.pm,v 1.8 2006/01/04 21:57:48 perlstalker Exp $
+# $Id: ResultSet.pm,v 1.9 2006/01/09 23:00:14 perlstalker Exp $
 
 use VUser::Meta;
 
@@ -75,6 +75,10 @@ sub sort_results
     # Don't sort if there's no order requested.
     return @{$self->{values}} if (not defined $order_by);
 
+#     print STDERR ("Order: $order_by Idx: $column_idx; Type: ",
+# 		  $self->{meta}[$column_idx]->type,
+# 		  "\n");
+
     return sort {
 	my ($A, $B) = ($a, $b);
 	if ($sort_order eq 'des') {
@@ -84,11 +88,12 @@ sub sort_results
 	my $type = $self->{meta}[$column_idx]->type;
 	my $res = undef;
 	if ($type eq 'string') {
-	    $res = $A cmp $B;
+	    $res = $A->[$column_idx] cmp $B->[$column_idx];
 	} else {
-	    $res = $A <=> $B;
+	    $res = $A->[$column_idx] <=> $B->[$column_idx];
 	}
-	$res;
+	#print STDERR $A->[$column_idx],' <=> ',$B->[$column_idx]," => $res\n";
+	return $res;
     } @{$self->{values}};
 }
 

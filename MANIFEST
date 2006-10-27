@@ -11,6 +11,8 @@ lib/VUser/Log.pm
 lib/VUser/Log/Syslog.pm
 lib/VUser/Meta.pm
 lib/VUser/ResultSet.pm
+lib/VUser/ResultSet/Display.pm
+lib/VUser/ResultSet/Display/CSV.pm
 lib/VUser/SOAP.pm
 lib/VUser/Test.pm
 lib/VUser/Widget.pm
@@ -18,7 +20,5 @@ Makefile.PL
 MANIFEST			This list of files
 META.yml
 README
-sbin/vsoapc
-sbin/vsoapd
 sbin/vuser
 vuser.conf.dist

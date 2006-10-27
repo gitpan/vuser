@@ -1,14 +1,14 @@
 #!/usr/bin/perl
 
 # Copyright 2005 Randy Smith <perlstalker@gmail.com>
-# $Id: Makefile.PL,v 1.5 2005/08/29 19:12:27 perlstalker Exp $
+# $Id: Makefile.PL,v 1.6 2006/09/28 17:31:21 perlstalker Exp $
 
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
 	      NAME            => 'vuser',
 	      VERSION_FROM    => 'sbin/vuser',
-	      EXE_FILES       => [qw[sbin/vuser sbin/vsoapd sbin/vsoapc]],
+	      EXE_FILES       => [qw[sbin/vuser]],
 	      INSTALLSCRIPT   => '$(PREFIX)/sbin',
 	      PREREQ_PM       => {'Config::IniFiles' => 0,
 				  'Regexp::Common'   => 0,

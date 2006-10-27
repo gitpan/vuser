@@ -6,30 +6,31 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vuser,v 1.14 2006/01/04 21:57:49 perlstalker Exp $
+# $Id: vuser,v 1.23 2006/10/27 03:44:44 perlstalker Exp $
 
 use Pod::Usage;
 use Getopt::Long qw(:config require_order);
 use FindBin;
 use Config::IniFiles;
 
-our $REVISION = (split (' ', '$Revision: 1.14 $'))[1];
-our $VERSION = "0.3.0";
+our $REVISION = (split (' ', '$Revision: 1.23 $'))[1];
+our $VERSION = "0.4.0";
 
 our $DEBUG = 0;
 
 BEGIN {
 
-    our @etc_dirs = ('/usr/local/etc',
-		     '/usr/local/etc/vuser',
-		     '/etc',
-		     '/etc/vuser',
-		     "$FindBin::Bin/../etc",
-		     "$FindBin::Bin",
-		     "$FindBin::Bin/..",
+    our @etc_dirs = (
+		             "$FindBin::Bin/../etc",
+		             "$FindBin::Bin",
+		             "$FindBin::Bin/..",
                      "$FindBin::Bin/vuser",
                      "$FindBin::Bin/../vuser",
-                     "$FindBin::Bin/../etc/vuser"
+                     "$FindBin::Bin/../etc/vuser",
+                     '/usr/local/etc',
+		             '/usr/local/etc/vuser',
+		             '/etc',
+		             '/etc/vuser',
                      );
 }
 
@@ -40,12 +41,18 @@ use lib (map { "$_/lib" } @etc_dirs);
 
 use VUser::ExtHandler;
 use VUser::ResultSet;
+use VUser::ResultSet::Display;
 use VUser::Meta;
 use VUser::ExtLib qw(strip_ws check_bool);
 use VUser::Log qw(:levels);
 
 my $config_file;
-my $result = GetOptions( "config=s" => \$config_file );
+my $format;
+my $debug = 0;
+my $result = GetOptions( "config=s" => \$config_file,
+			 "format=s" => \$format,
+                         "debug|s"  => \$debug
+			 );
 
 if( defined $config_file )
 {
@@ -66,10 +73,28 @@ if (not defined $config_file) {
     die "Unable to find a vuser.conf file in ".join (", ", @etc_dirs).".\n";
 }
 
+if ($debug) {
+    print STDERR "Loading $config_file\n";
+}
+
 my %cfg;
 tie %cfg, 'Config::IniFiles', (-file => $config_file);
 
+if (@Config::IniFiles::errors) {
+    warn "There were errors loading $config_file\n";
+    foreach my $error (@Config::IniFiles::errors) {
+	warn "$error\n";
+    }
+    die "Please correct the errors and try again\n";
+}
+
 $DEBUG = check_bool $cfg{'vuser'}{'debug'};
+$DEBUG = 1 if ($debug);
+
+if ($debug) {
+    use Data::Dumper;
+    print Dumper \%cfg;
+}
 
 our $log = VUser::Log->new(\%cfg, 'vuser');
 my $eh = new VUser::ExtHandler (\%cfg);
@@ -94,30 +119,19 @@ my @rs;
 eval { @rs = $eh->run_tasks($keyword, $action, \%cfg); };
 warn $@ if $@;
 
-# print "RS: "; use Data::Dumper; print Dumper \@rs;
+if ($debug) {
+    print "RS: "; use Data::Dumper; print Dumper \@rs;
 
-# print "Show rs ($cfg{'vuser'}{'show result set'}) ? ",
-#     (check_bool($cfg{'vuser'}{'show result set'})? "Yes":"No"),
-#     "\n";
+    print("Show rs ($cfg{'vuser'}{'show result set'}) ? ",
+	  (check_bool($cfg{'vuser'}{'show result set'})? "Yes":"No"),
+	  "\n"
+	  );
+}
 
 if (check_bool($cfg{'vuser'}{'show result set'}) and @rs) {
-    foreach my $rs1 (@rs) {
-	foreach my $rs (@$rs1) {
-	    # print "RS: "; use Data::Dumper; print Dumper $rs;
-	    # print "\$rs is a ", ref $rs, "\n";
-	    my @meta = $rs->get_metadata;
-	    
-	    foreach my $row ($rs->results()) {
-		# print "Value: "; use Data::Dumper; print Dumper $row;
-		for (my $i = 0; $i < @meta; $i++) {
-		    printf("%s: %s\n",
-			   $meta[$i]->name,
-			   defined $row->[$i]? $row->[$i] : 'undef');
-		}
-		print "\n";
-	    }
-	}
-    }
+    $cfg{'vuser'}{'display format'} = $format if defined $format;
+    my $display = VUser::ResultSet::Display->new(\%cfg);
+    $display->display(@rs);
 }
 
 eval { $eh->cleanup(%cfg); };
@@ -145,13 +159,33 @@ See 'vuser help module' for a list of actions and options.
 
 =head1 DESCRIPTION
 
+=head1 CONFIGURATION
+
+[vuser]
+# Enable debugging (Lots of output)
+debug = no
+
+# Space delimited list of extensions to load
+# extensions = Email::Courier Radius::SQL
+extensions = Email
+
+#log type = Syslog
+#log level = notice
+log level = debug
+
+show result set = yes
+# Display the result set in a different format.
+# Allowed formats: CSV
+#display format = CSV
+
+
 =head1 BUGS
 
 =head1 SEE ALSO
 
 =head1 AUTHOR
 
-Randy Smith <perlstalker@gmail.com>
+Randy Smith <perlstalker@vuser.org>
 
 =head1 LICENSE
  
