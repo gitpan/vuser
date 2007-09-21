@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith <perlstalker@vuser.org>
-# $Id: Syslog.pm,v 1.4 2006/01/04 21:57:49 perlstalker Exp $
+# $Id: Syslog.pm,v 1.6 2007/04/24 14:25:44 perlstalker Exp $
 
 our $VERSION = "0.3.0";
 
@@ -15,14 +15,14 @@ use Sys::Syslog qw(:DEFAULT);
 
 my $c_sec = 'Log Syslog';
 
-my %prior_map = (LOG_EMERG() => 'emerg',
-		 LOG_ALERT() => 'alert',
-		 LOG_CRIT()  => 'crit',
-		 LOG_ERR()   => 'err',
-		 LOG_WARN()  => 'warn',
-		 LOG_NOTICE() => 'notice',
-		 LOG_INFO()  => 'info',
-		 LOG_DEBUG() => 'debug');
+my %prior_map = (VUser::Log::LOG_EMERG() => 'emerg',
+		 VUser::Log::LOG_ALERT() => 'alert',
+		 VUser::Log::LOG_CRIT()  => 'crit',
+		 VUser::Log::LOG_ERR()   => 'err',
+		 VUser::Log::LOG_WARN()  => 'warning',
+		 VUser::Log::LOG_NOTICE() => 'notice',
+		 VUser::Log::LOG_INFO()  => 'info',
+		 VUser::Log::LOG_DEBUG() => 'debug');
 
 sub init
 {
@@ -43,7 +43,14 @@ sub write_msg
     my $self = shift;
     my ($level, $msg) = @_;
 
-    syslog ($prior_map{$level}, '%s', $msg);
+    if (not defined $level or not defined $prior_map{$level}) {
+	$level = VUser::Log::LOG_ERR();
+    }
+
+    eval { syslog ($prior_map{$level}, '%s', $msg); };
+    if ($@) {
+	# ...?
+    }
 }
 
 sub version { return $VERSION; }

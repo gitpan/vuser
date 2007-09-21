@@ -6,15 +6,15 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vuser,v 1.23 2006/10/27 03:44:44 perlstalker Exp $
+# $Id: vuser,v 1.25 2007/09/20 20:53:55 perlstalker Exp $
 
 use Pod::Usage;
 use Getopt::Long qw(:config require_order);
 use FindBin;
 use Config::IniFiles;
 
-our $REVISION = (split (' ', '$Revision: 1.23 $'))[1];
-our $VERSION = "0.4.0";
+our $REVISION = (split (' ', '$Revision: 1.25 $'))[1];
+our $VERSION = "0.4.1";
 
 our $DEBUG = 0;
 
@@ -98,6 +98,7 @@ if ($debug) {
 
 our $log = VUser::Log->new(\%cfg, 'vuser');
 my $eh = new VUser::ExtHandler (\%cfg);
+$eh->load_extensions(%cfg);
 
 $log->log(LOG_DEBUG, "Config loaded from $config_file");
 
@@ -114,7 +115,8 @@ if (defined $action
 $action = '' unless defined $action;
 
 # Ok. Now it's time to do the action.
-$log->log(LOG_NOTICE, "Running %s %s", $keyword, $action);
+my $real_user = getpwuid($<); # Get the user running this.
+$log->log(LOG_NOTICE, "%s running %s %s", $real_user, $keyword, $action);
 my @rs;
 eval { @rs = $eh->run_tasks($keyword, $action, \%cfg); };
 warn $@ if $@;

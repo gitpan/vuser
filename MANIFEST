@@ -1,3 +1,4 @@
+.cvsignore
 COPYING
 INSTALL
 lib/VUser/ACL.pm
@@ -9,11 +10,11 @@ lib/VUser/ExtHandler.pm
 lib/VUser/ExtLib.pm
 lib/VUser/Log.pm
 lib/VUser/Log/Syslog.pm
+lib/VUser/Log/File.pm
 lib/VUser/Meta.pm
 lib/VUser/ResultSet.pm
 lib/VUser/ResultSet/Display.pm
 lib/VUser/ResultSet/Display/CSV.pm
-lib/VUser/SOAP.pm
 lib/VUser/Test.pm
 lib/VUser/Widget.pm
 Makefile.PL

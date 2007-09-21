@@ -3,10 +3,10 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: ExtHandler.pm,v 1.44 2006/09/28 17:10:51 perlstalker Exp $
+# $Id: ExtHandler.pm,v 1.50 2007/09/20 18:01:51 perlstalker Exp $
 
-our $REVISION = (split (' ', '$Revision: 1.44 $'))[1];
-our $VERSION = "0.3.1";
+our $REVISION = (split (' ', '$Revision: 1.50 $'))[1];
+our $VERSION = "0.3.2";
 
 use lib qw(..);
 use Getopt::Long;
@@ -52,7 +52,7 @@ sub new
 
     bless $me, $class;
 
-    $me->load_extensions(%$cfg);
+    #$me->load_extensions(%$cfg);
 
     return $me;
 }
@@ -65,6 +65,8 @@ sub register_keyword
 
     unless (exists $self->{keywords}{$keyword}) {
 	$self->{keywords}{$keyword} = {};
+
+	$log->log(LOG_DEBUG, "Reg keyword : $keyword");
 
 	$self->{descrs}{$keyword} = {_descr => $descr};
     }
@@ -86,6 +88,7 @@ sub register_action
     }
 
     unless (exists $self->{keywords}{$keyword}{$action}) {
+	$log->log(LOG_DEBUG, "Reg action for $keyword: $action");
 	$self->{keywords}{$keyword}{$action} = {tasks => [], options => {}};
 	$self->{descrs}{$keyword}{$action} = {_descr => $descr};
     }
@@ -155,7 +158,8 @@ sub register_option
 	$required = shift;
     } else {
 	if ($main::DEBUG) {
-	    use Data::Dumper; print Dumper $option;
+	    use Data::Dumper;
+	    $log->log(LOG_DEBUG, 'Option: '.Dumper($option));
 	}
 	die "Option on $keyword|$action was not a VUser::Meta\n";
     }
@@ -381,6 +385,23 @@ sub load_extensions
     }
 }
 
+sub load_extensions_list {
+    my $self = shift;
+    my $cfg = shift;
+    my @exts = @_;
+
+    $self->{'_loaded'} = {};
+    $self->{'_loadorder'} = [];
+
+    $self->load_extension('CORE');
+    $log->log(LOG_DEBUG, "Cfg extensions: ".join(',', @exts));
+    foreach my $extension (@exts)
+    {
+	eval { $self->load_extension( $extension, %$cfg ); };
+	$log->log(LOG_DEBUG, "Unable to load %s: %s", $extension, $@) if $@;
+    }
+}
+
 sub load_extension
 {
     my $self = shift;
@@ -404,7 +425,7 @@ sub load_extension
     $log->log(LOG_DEBUG, "Checking dependencies for %s", $ext);    
     if ($pm->can('depends')) {
 	my @depends = ();
-	@depends = $pm->depends();
+	@depends = $pm->depends(\%cfg);
 
 	foreach my $depend (@depends) {
 	    next if not $depend; # Should not happen but let's be careful
@@ -459,8 +480,8 @@ sub run_tasks
     $log->log(LOG_DEBUG,"Keyword: '$keyword' Action: '$action' ARGV: @ARGV");
 
     if ($main::DEBUG >= 1) {
-	print "Options: ";
-	use Data::Dumper; print Dumper \%opts;
+	use Data::Dumper;
+	$log->log(LOG_DEBUG, 'Options: '. Dumper(\%opts));
     }
 
     unless (exists $self->{keywords}{$keyword}) {
@@ -618,8 +639,17 @@ sub run_tasks
 	foreach my $task (@$priority) {
 	    # Return values?
 	    my $rs = &$task($cfg, \%opts, $action, $self);
-	    if (defined $rs and UNIVERSAL::isa($rs, "VUser::ResultSet")) {
+	    if (not defined $rs) {
+	    } elsif (UNIVERSAL::isa($rs, "VUser::ResultSet")) {
 		push @results, $rs;
+	    } elsif (UNIVERSAL::isa($rs, "ARRAY")) {
+		# Someone sent us an array ref. Go through the list
+		# and push any ::ResultSets on to the result list.
+		foreach my $r (@$rs) {
+		    if (UNIVERSAL::isa($r, "VUser::ResultSet")) {
+			push @results, $rs;
+		    }
+		}
 	    }
 	}
     }
@@ -642,9 +672,15 @@ __END__
 
 =head1 NAME
 
-ExtHandler - vuser extension handler.
+VUser::ExtHandler - vuser extension handler.
 
 =head1 DESCRIPTION
+
+=head2 new
+
+=head2 load_extensions
+
+=head2 load_extensions_list
 
 =head2 register_keyword
 
@@ -654,7 +690,7 @@ ExtHandler - vuser extension handler.
 
 =head1 AUTHOR
 
-Randy Smith <perlstalker@gmail.com>
+Randy Smith <perlstalker@vuser.org>
 
 =head1 LICENSE
  
