@@ -3,15 +3,17 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: CORE.pm,v 1.24 2006/01/04 21:57:48 perlstalker Exp $
+# $Id: CORE.pm,v 1.26 2007/09/21 20:40:19 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.24 $'))[1];
-our $VERSION = "0.3.0";
+our $REVISION = (split (' ', '$Revision: 1.26 $'))[1];
+our $VERSION = "0.4.3";
 
 use Pod::Usage;
 
+use VUser::Meta;
+use VUser::ResultSet;
 use VUser::Extension;
 push @ISA, 'VUser::Extension';
 
@@ -57,8 +59,15 @@ sub version
     my $cfg = shift;
     my $opts = shift;
 
-    print ("Version: $VERSION\n");
-    return $VERSION;
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'extension',
+				   'type' => 'string',
+				   'description' => 'Extension name'));
+    $rs->add_meta(VUser::Meta->new('name' => 'version',
+				   'type' => 'string',
+				   'description' => 'Version number'));
+    $rs->add_data(['CORE', $VERSION]);
+    return $rs;
 }
 
 sub revision
@@ -66,8 +75,15 @@ sub revision
     my $cfg = shift;
     my $opts = shift;
 
-    print ("Revision: $main::REVISION\n");
-    return $main::REVISION;
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'extension',
+				   'type' => 'string',
+				   'description' => 'Extension name'));
+    $rs->add_meta(VUser::Meta->new('name' => 'version',
+				   'type' => 'string',
+				   'description' => 'Revision number'));
+    $rs->add_data(['CORE', $REVISION]);
+    return $rs;
 }
 
 sub help

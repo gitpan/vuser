@@ -6,15 +6,16 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vuser,v 1.25 2007/09/20 20:53:55 perlstalker Exp $
+# $Id: vuser,v 1.29 2008/03/17 17:52:05 perlstalker Exp $
 
 use Pod::Usage;
 use Getopt::Long qw(:config require_order);
 use FindBin;
 use Config::IniFiles;
+use User::pwent;
 
-our $REVISION = (split (' ', '$Revision: 1.25 $'))[1];
-our $VERSION = "0.4.1";
+our $REVISION = (split (' ', '$Revision: 1.29 $'))[1];
+our $VERSION = "0.4.4";
 
 our $DEBUG = 0;
 
@@ -99,6 +100,7 @@ if ($debug) {
 our $log = VUser::Log->new(\%cfg, 'vuser');
 my $eh = new VUser::ExtHandler (\%cfg);
 $eh->load_extensions(%cfg);
+$eh->register_task('version', '', \&version, -10);
 
 $log->log(LOG_DEBUG, "Config loaded from $config_file");
 
@@ -115,7 +117,10 @@ if (defined $action
 $action = '' unless defined $action;
 
 # Ok. Now it's time to do the action.
-my $real_user = getpwuid($<); # Get the user running this.
+my $real_user = 'unknown';
+my $ent;
+eval { $ent = getpwuid($<); }; # Get the user running this.
+$real_user = $ent->name if (defined $ent);
 $log->log(LOG_NOTICE, "%s running %s %s", $real_user, $keyword, $action);
 my @rs;
 eval { @rs = $eh->run_tasks($keyword, $action, \%cfg); };
@@ -140,9 +145,36 @@ eval { $eh->cleanup(%cfg); };
 
 exit;
 
+sub version
+{
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'extension',
+				   'type' => 'string',
+				   'description' => 'Extension name'));
+    $rs->add_meta(VUser::Meta->new('name' => 'version',
+				   'type' => 'string',
+				   'description' => 'Version number'));
+    $rs->add_data(['vuser', $VERSION]);
+    return $rs;
+}
+
 sub revision
 {
-    print $REVISION;
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'extension',
+				   'type' => 'string',
+				   'description' => 'Extension name'));
+    $rs->add_meta(VUser::Meta->new('name' => 'version',
+				   'type' => 'string',
+				   'description' => 'Revision number'));
+    $rs->add_data(['vuser', $REVISION]);
+    return $rs;
 }
 
 __END__
@@ -163,23 +195,37 @@ See 'vuser help module' for a list of actions and options.
 
 =head1 CONFIGURATION
 
-[vuser]
-# Enable debugging (Lots of output)
-debug = no
+By default, vuser looks for the file F<vuser.conf> in these locations:
 
-# Space delimited list of extensions to load
-# extensions = Email::Courier Radius::SQL
-extensions = Email
+ "$FindBin::Bin/../etc",
+ "$FindBin::Bin",
+ "$FindBin::Bin/..",
+ "$FindBin::Bin/vuser",
+ "$FindBin::Bin/../vuser",
+ "$FindBin::Bin/../etc/vuser",
+ '/usr/local/etc',
+ '/usr/local/etc/vuser',
+ '/etc',
+ '/etc/vuser',  
 
-#log type = Syslog
-#log level = notice
-log level = debug
+You may specify the path to the configuration file with the C<--config> option. 
 
-show result set = yes
-# Display the result set in a different format.
-# Allowed formats: CSV
-#display format = CSV
-
+ [vuser]
+ # Enable debugging (Lots of output)
+ debug = no
+ 
+ # Space delimited list of extensions to load
+ # extensions = Email::Courier Radius::SQL
+ extensions = Email
+ 
+ #log type = Syslog
+ #log level = notice
+ log level = debug
+ 
+ show result set = yes
+ # Display the result set in a different format.
+ # Allowed formats: CSV
+ #display format = CSV
 
 =head1 BUGS
 

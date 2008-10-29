@@ -3,17 +3,20 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: Batch.pm,v 1.3 2006/01/04 21:57:48 perlstalker Exp $
+# $Id: Batch.pm,v 1.7 2007/09/24 19:31:53 perlstalker Exp $
 
 use vars qw(@ISA);
 
-our $REVISION = (split (' ', '$Revision: 1.3 $'))[1];
-our $VERSION = "0.3.0";
+our $REVISION = (split (' ', '$Revision: 1.7 $'))[1];
+our $VERSION = "0.3.1";
 
+use VUser::Log qw(:levels);
 use Pod::Usage;
 
 use VUser::Extension;
 push @ISA, 'VUser::Extension';
+
+my $log;
 
 sub config_file
 {
@@ -54,8 +57,15 @@ sub version
     my $cfg = shift;
     my $opts = shift;
 
-    print ("Version: $VERSION\n");
-    return $VERSION;
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'extension',
+				   'type' => 'string',
+				   'description' => 'Extension name'));
+    $rs->add_meta(VUser::Meta->new('name' => 'version',
+				   'type' => 'string',
+				   'description' => 'Version number'));
+    $rs->add_data(['Batch', $VERSION]);
+    return $rs;
 }
 
 sub revision
@@ -63,8 +73,15 @@ sub revision
     my $cfg = shift;
     my $opts = shift;
 
-    print ("Revision: $main::REVISION\n");
-    return $REVISION;
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'extension',
+				   'type' => 'string',
+				   'description' => 'Extension name'));
+    $rs->add_meta(VUser::Meta->new('name' => 'version',
+				   'type' => 'string',
+				   'description' => 'Revision number'));
+    $rs->add_data(['Batch', $REVISION]);
+    return $rs;
 }
 
 sub init
@@ -72,6 +89,13 @@ sub init
     my $eh = shift; # ExtHandler
     my %cfg = @_;
 
+    if (defined $main::log) {
+        $log = $main::log;
+    } else {
+        $log = VUser::Log->new(\%cfg, 'vuser')
+    }
+
+    $eh->register_task('version', '', \&version);
 
     # Batch
     $eh->register_keyword('batch', 'Run in batch mode.');
@@ -125,7 +149,7 @@ sub process_event_file
     my $dir = shift;
     my $file = shift;
 
-    my ($keyword, $action, $garbage) = split ('-', $file);
+    my ($keyword, $action, $garbage) = split (/[_-]/, $file);
 
     my %opts = ();
     open FILE, "$dir/$file" or die "Unable to open $dir/$file: $!";
@@ -157,6 +181,7 @@ sub process_event_file
 #    use Data::Dumper; print Dumper \%opts;
 
     # All the data has been read, time to run the task.
+    $log->log(LOG_NOTICE, "Batch running $keyword|$action");
     eval { $eh->run_tasks($keyword, $action, $cfg, %opts); };
     die "$file: ".$@ if $@;
 
@@ -196,7 +221,8 @@ Enables batch mode for vuser. When run as C<vuser batch <dir>>, the files in
 descend into sub-directories, if they exist.
 
 The files are named keyword-action-unique where keyword and action are the
-same as if you had run C<vuser keyword action>. The options for the action
+same as if you had run C<vuser keyword action>. (You may use '_' instead of
+'-'.) The options for the action
 are listed, one per line, in the file as:
 
  option1 => value

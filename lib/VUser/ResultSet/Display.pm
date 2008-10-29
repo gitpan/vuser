@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2006 Randy Smith <perlstalker@vuser.org>
-# $Id: Display.pm,v 1.4 2007/09/20 19:43:35 perlstalker Exp $
+# $Id: Display.pm,v 1.5 2007/09/24 20:16:07 perlstalker Exp $
 
 use VUser::ExtLib qw(:config);
 our $VERSION = "0.3.1";
@@ -54,11 +54,11 @@ sub display
 	    #print "Display RS with: ", ref $self, "\n";
 	    eval { $self->display_one($rs); };
 	    die "Can't display result set: $@\n" if $@;
-	    print "\n";
 	} elsif (ref $rs eq 'ARRAY') {
 	    # $rs is a list ref. Dereference the list and send it to
 	    # display() again to process any ResultSets within that list.
 	    $self->display(@$rs);
+	    print "\n";
 	} else {
 	    # It's not a VUser::ResultSet
 	}

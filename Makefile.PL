@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Copyright 2005 Randy Smith <perlstalker@gmail.com>
-# $Id: Makefile.PL,v 1.6 2006/09/28 17:31:21 perlstalker Exp $
+# $Id: Makefile.PL,v 1.7 2008/03/17 17:53:53 perlstalker Exp $
 
 use ExtUtils::MakeMaker;
 
@@ -12,7 +12,8 @@ WriteMakefile(
 	      INSTALLSCRIPT   => '$(PREFIX)/sbin',
 	      PREREQ_PM       => {'Config::IniFiles' => 0,
 				  'Regexp::Common'   => 0,
-				  'File::Path'       => 0
+				  'File::Path'       => 0,
+				  'User::pwent'      => 0
 				  }
 	      );
 
