@@ -3,10 +3,10 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: ExtHandler.pm,v 1.51 2007/09/24 20:16:06 perlstalker Exp $
+# $Id: ExtHandler.pm,v 1.51 2007-09-24 20:16:06 perlstalker Exp $
 
 our $REVISION = (split (' ', '$Revision: 1.51 $'))[1];
-our $VERSION = "0.3.2";
+our $VERSION = "0.5.0";
 
 use lib qw(..);
 use Getopt::Long;
@@ -109,51 +109,7 @@ sub register_option
     my $meta;
     my $required = 0;
 
-    if (not ref $option) {
-	# It's not a ref, build a VUser::Meta object
-	my $type = shift;
-	$required = shift;
-	my $descr = shift;
-	my $widget = shift;     # Widget class (Optional)
-
-	$log->log(LOG_DEBUG, "Reg option for $keyword|$action: $option");
-
-	if ($self->{$keyword}{'_meta'}{$option}) {
-	    $meta = $self->{$keyword}{'_meta'}{$option};
-	} else {
-
-	    $type = lc($type);
-	    my $d_type = 'string';
-	    if ($type eq '!'
-		or $type eq ''
-		or $type eq 'boolean') {
-		$d_type = 'boolean';
-	    } elsif ($type eq '+'
-		     or $type eq 'counter') {
-		$d_type = 'counter';
-	    } elsif ($type =~ /^([=:])([siof])([@%])?$/) {
-		my $gol_type = $2;
-		if ($gol_type eq 's') {
-		    $d_type = 'string';
-		} elsif ($gol_type eq 'i'
-			 or $gol_type eq 'o'
-			 or $gol_type eq 'integer'
-			 ) {
-		    $d_type = 'integer';
-		} elsif ($gol_type eq 'f') {
-		    $d_type = 'float';
-		}
-	    } else {
-		$d_type = 'string';
-	    }
-
-	    $meta = new VUser::Meta(name => $option,
-				    description => $descr,
-				    type => $d_type
-				    );
-	}
-
-    } elsif (UNIVERSAL::isa($option, 'VUser::Meta')) {
+    if (eval { $option->isa('VUser::Meta'); }) {
 	$meta = $option;
 	$required = shift;
     } else {
@@ -192,11 +148,11 @@ sub register_option
 	$self->{descrs}{$keyword}{$action}{$meta->name} = {_descr => $meta->description};
     }
 
-    if (exists $self->{$keyword}{'_meta'}{$meta->name}) {
-	# silently discard dups
-    } else {
-	$self->{$keyword}{'_meta'}{$meta->name} = $meta;
-    }
+    # Q: Should I auto register meta data?
+    # A: No. Let the extensions register the meta data they feel
+    #    is important. This will yeild a nicer way of pulling in
+    #    "standard" meta data for extensions that build on defaults.
+    #$self->register_meta($keyword, $meta);
 }
 
 sub register_meta
@@ -258,8 +214,9 @@ sub register_task
     my $self = shift;
     my $keyword = shift;
     my $action = shift;
-    my $handler = shift;        # sub ref. Takes 2 params: The tied config
-				#  the options ref, and the action
+    my $handler = shift;        # sub ref. Takes 4 params: The tied config
+				#  the options ref, the action, and the
+                                #  ::ExtHandler
     my $priority = shift;
 
     unless (exists $self->{keywords}{$keyword}) {
@@ -368,21 +325,18 @@ sub get_description
 sub load_extensions
 {
     my $self = shift;
-    my %cfg = @_;
+    my $cfg = shift;
 
     $self->{'_loaded'} = {};
     $self->{'_loadorder'} = [];
 
-    $self->load_extension('CORE');
-    my $exts = $cfg{ vuser }{ extensions };
+    my $exts = $cfg->{ vuser }{ extensions };
     $exts = '' unless $exts;
     VUser::ExtLib::strip_ws($exts);
     $log->log(LOG_DEBUG, "Cfg extensions: $exts");
-    foreach my $extension (split( / /, $exts))
-    {
-	eval { $self->load_extension( $extension, %cfg ); };
-	$log->log(LOG_DEBUG, "Unable to load %s: %s", $extension, $@) if $@;
-    }
+
+    my @exts = split / /, $exts;
+    eval { $self->load_extensions_list($cfg, @exts) };
 }
 
 sub load_extensions_list {
@@ -397,7 +351,7 @@ sub load_extensions_list {
     $log->log(LOG_DEBUG, "Cfg extensions: ".join(',', @exts));
     foreach my $extension (@exts)
     {
-	eval { $self->load_extension( $extension, %$cfg ); };
+	eval { $self->load_extension( $extension, $cfg ); };
 	$log->log(LOG_DEBUG, "Unable to load %s: %s", $extension, $@) if $@;
     }
 }
@@ -406,7 +360,7 @@ sub load_extension
 {
     my $self = shift;
     my $ext = shift;
-    my %cfg = @_;
+    my $cfg = shift;
 
     my $pm = 'VUser::'.$ext; # Module name
 
@@ -425,12 +379,12 @@ sub load_extension
     $log->log(LOG_DEBUG, "Checking dependencies for %s", $ext);    
     if ($pm->can('depends')) {
 	my @depends = ();
-	@depends = $pm->depends(\%cfg);
+	@depends = $pm->depends($cfg);
 
 	foreach my $depend (@depends) {
 	    next if not $depend; # Should not happen but let's be careful
 	    $log->log(LOG_INFO, "$ext depends on $depend");
-	    eval { $self->load_extension($depend, %cfg); };
+	    eval { $self->load_extension($depend, $cfg); };
 	    die "Unable to load dependency $depend: $@\n" if $@;
 	}
     }
@@ -438,7 +392,7 @@ sub load_extension
     $log->log(LOG_INFO, "Loading extension: $ext");
     $self->{'_loaded'}{$ext} = 1;
     push (@{$self->{'_loadorder'}}, $ext);
-    &{$pm.'::init'}($self, %cfg);
+    &{$pm.'::init'}($self, %{ $cfg });
 }
 
 sub unload_extensions
@@ -477,7 +431,67 @@ sub run_tasks
 
     my %opts = @_;
 
+    my $wild_action = 0;
+    if (exists $self->{keywords}{$keyword}{$action}) {
+	$wild_action = 0;
+    } elsif (exists $self->{keywords}{$keyword}{'*'}) {
+	$wild_action = 1;
+    } else {
+	die "Unknown action '$action'\n";
+    }
+
     $log->log(LOG_DEBUG,"Keyword: '$keyword' Action: '$action' ARGV: @ARGV");
+
+    eval { %opts = $self->process_options($keyword, $action, $cfg, %opts); };
+    die $@ if $@;
+
+    my @tasks = ();
+    if ($wild_action) {
+	@tasks = @{$self->{keywords}{$keyword}{'*'}{tasks}};
+    } else {
+	@tasks = @{$self->{keywords}{$keyword}{$action}{tasks}};
+    }
+
+    my @results = ();
+    foreach my $priority (@tasks) {
+	foreach my $task (@$priority) {
+	    # Return values?
+	    my $rs = &$task($cfg, \%opts, $action, $self);
+	    if (not defined $rs) {
+	    } elsif (UNIVERSAL::isa($rs, "VUser::ResultSet")) {
+		push @results, $rs;
+	    } elsif (UNIVERSAL::isa($rs, "ARRAY")) {
+		# Someone sent us an array ref. Go through the list
+		# and push any ::ResultSets on to the result list.
+		foreach my $r (@$rs) {
+		    if (UNIVERSAL::isa($r, "VUser::ResultSet")) {
+			push @results, $r;
+		    } elsif (UNIVERSAL::isa($r, 'ARRAY')) {
+			push @results, $r;
+		    }
+		}
+	    }
+	}
+    }
+
+    return \@results;
+}
+
+sub cleanup
+{
+    my $self = shift;
+    my %cfg = @_;
+
+    eval { $self->unload_extensions(%cfg); };
+    warn $@ if $@;
+}
+
+sub process_options {
+    my $self = shift;
+    my $keyword = shift;
+    my $action = shift;
+    my $cfg = shift;
+    my %opts = @_;
 
     if ($main::DEBUG >= 1) {
 	use Data::Dumper;
@@ -601,11 +615,11 @@ sub run_tasks
 	    my $type = $self->{keywords}{$keyword}{$real_action}{options}{$opt}->type;
 	    if ($type eq 'string') {
 		$gopt_type = '=s';
-	    } elsif ($type eq 'integer') {
+	    } elsif ($type eq 'integer' or $type eq 'int') {
 		$gopt_type = '=i';
 	    } elsif ($type eq 'counter') {
 		$gopt_type = '+';
-	    } elsif ($type eq 'boolean') {
+	    } elsif ($type eq 'boolean' or $type eq 'bool') {
 		$gopt_type = '!';
 	    } elsif ($type eq 'float') {
 		$gopt_type = '=f';
@@ -627,45 +641,12 @@ sub run_tasks
 	die "Missing required option '$opt'.\n";
     }
 
-    my @tasks = ();
-    if ($wild_action) {
-	@tasks = @{$self->{keywords}{$keyword}{'*'}{tasks}};
-    } else {
-	@tasks = @{$self->{keywords}{$keyword}{$action}{tasks}};
+    if ($main::DEBUG >= 1) {
+	use Data::Dumper;
+	$log->log(LOG_DEBUG, 'Real Options: '. Dumper(\%opts));
     }
 
-    my @results = ();
-    foreach my $priority (@tasks) {
-	foreach my $task (@$priority) {
-	    # Return values?
-	    my $rs = &$task($cfg, \%opts, $action, $self);
-	    if (not defined $rs) {
-	    } elsif (UNIVERSAL::isa($rs, "VUser::ResultSet")) {
-		push @results, $rs;
-	    } elsif (UNIVERSAL::isa($rs, "ARRAY")) {
-		# Someone sent us an array ref. Go through the list
-		# and push any ::ResultSets on to the result list.
-		foreach my $r (@$rs) {
-		    if (UNIVERSAL::isa($r, "VUser::ResultSet")) {
-			push @results, $r;
-		    } elsif (UNIVERSAL::isa($r, 'ARRAY')) {
-			push @results, $r;
-		    }
-		}
-	    }
-	}
-    }
-
-    return \@results;
-}
-
-sub cleanup
-{
-    my $self = shift;
-    my %cfg = @_;
-
-    eval { $self->unload_extensions(%cfg); };
-    warn $@ if $@;
+    return %opts;
 }
 
 1;
@@ -676,19 +657,206 @@ __END__
 
 VUser::ExtHandler - vuser extension handler.
 
+=head1 SYNOPSIS
+
+ my $eh = VUser::ResultSet->new($cfg);
+ $eh->load_extentions($cfg);
+ 
+ my @resultsets = ();
+ eval { @resultsets = $eh->run_tasks($keyword, $action, $cfg); };
+ die $@ if $@;
+ 
+ $eh->cleanup();
+
+Extension usage
+
+ sub init {
+     # $eh is a VUser::ExtHandler
+     my ($cfg, $opts, $action, $eh) = @_;
+ 
+     $eh->register_keyword('foo', 'Manage foos');
+ 
+     $eh->register_meta('foo',
+         VUser::Meta->new('name' => 'bar',
+                          'type' => 'string',
+                          'description' => 'Where to drink'));
+     $eh->register_meta('foo',
+         VUser::Meta->new('name' => 'drink',
+                          'type' => 'string',
+                          'description' => 'What to drink'));
+  
+     $eh->register_action('foo', 'add', 'Add a foo');
+     $eh->register_option('foo', 'add',           # Required option
+                          $eh->get_meta('foo', 'bar'), 'req');
+     $eh->register_option('foo', 'add',           # Optional
+                          $eh->get_meta('foo', 'bar'));
+     $eh->register_task('foo', 'add', \&foo_add);
+ }
+ ...
+ sub foo_add {}
+
 =head1 DESCRIPTION
 
-=head2 new
+VUser::ExtHandler is the main control system for vuser extensions.
 
-=head2 load_extensions
+=head2 new($cfg[, $log])
 
-=head2 load_extensions_list
+Create a new VUser::ExtHandler object.
 
-=head2 register_keyword
+new() takes two options. The first is a reference to a Config::IniFiles
+tied hash for the vuser configuration. The second, option argument is
+a VUser::Log object. If it's not defined, the ExtHandler will look to see
+if C<$main::log> is a VUser::Log and use that instead. If it's not, the
+ExtHandler will create it's own VUser::Log object.
 
-=head2 register_action
+=head2 load_extensions($cfg);
 
-=head2 register_task
+Load extensions listed in the configuration file.
+
+C<$cfg> is a reference to a Config::IniFiles tied hash.
+
+=head2 load_extensions_list($cfg, @extensions)
+
+Load a given list of extentions.
+
+=over 4
+
+=item $cfg
+
+Reference to a Config::IniFiles tied hash.
+
+=item @extensions
+
+List of extension names.
+
+=back
+
+=head2 register_keyword($keyword[, $description])
+
+Register a keyword.
+
+=over 4
+
+=item $keyword
+
+=item $description
+
+A description for this keyword that will be displayed by C<vuser help>
+
+=back
+
+=head2 register_meta($keyword, $meta)
+
+Register a VUser::Meta object with the ExtHandler. Other extensions
+can access the object with C<get_meta()>.
+
+=over4
+
+=item $keyword
+
+The keyword to lookup meta data for.
+
+=item $meta
+
+The name of the meta data object to get.x
+
+=back
+
+=head2 register_action($keyword, $action, $description)
+
+Register an action with the ExtHandler.
+
+=over 4
+
+=item $keyword
+
+The keyword to add an action to.
+
+=item $action
+
+The action to register.
+
+As a special case, C<$action> can be defined as a wildcard with 'I<*>'.
+Wildcard actions are run for any unknown action.
+
+=item $description
+
+A description of the action to be displayed with C<vuser help>.
+
+=back
+
+=head2 register_option($keyword, $action, $meta[, $required])
+
+Register an option for a keyword|action pair.
+
+=over 4
+
+=item $keyword
+
+=item $action
+
+=item $meta
+
+A VUser::Meta object that defined the option.
+
+=item $required (Optional)
+
+If set to a true value, the option is required; otherwise the
+option is optional and may be omitted.
+
+=back
+
+=head2 register_task($keyword, $action, $task[, $priority])
+
+Register a fuction to be run for the keyword|action pair
+
+=over 4
+
+=item $keyword
+
+=item $action
+
+=item $task
+
+C<$task> is a sub reference that is called with four arguments.
+
+=over 8
+
+=item A reference to the Config::IniFiles hash
+
+=item A reference to a hash containing the options
+
+=item The action run. Usuful if handling wildcard actions.
+
+=item A reference to the VUser::ExtHandler that is running the tasks
+
+=back
+
+=item $priority (Optional)
+
+The priority of the task to run. Tasks will be run in order of priority
+(smaller numbers first) with tasks of equal priority run in the
+order they were registered.
+
+C<$proirity> can be set to negative numbers to lower the priority or
+'+ N' to increase the priority by N. (Note the space between '+' and
+the number.) The lowest priority is zero.
+
+You can get the default priority by calling C<$eh->DEFAULT_PRIORITY;>.
+
+=back
+
+=head2 get_keywords
+
+=head2 is_keyword($keyword)
+
+=head2 get_meta($keyword, $meta_name)
+
+=head2 get_actions($keyword)
+
+=head2 get_options($keyword, $action)
+
+=head2 get_description($keyword[, $action[, $option]])
 
 =head1 AUTHOR
 

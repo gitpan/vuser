@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2006 Randy Smith <perlstalker@vuser.org>
-# $Id: Display.pm,v 1.5 2007/09/24 20:16:07 perlstalker Exp $
+# $Id: Display.pm,v 1.5 2007-09-24 20:16:07 perlstalker Exp $
 
 use VUser::ExtLib qw(:config);
 our $VERSION = "0.3.1";

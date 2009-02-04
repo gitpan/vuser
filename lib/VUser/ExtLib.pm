@@ -4,7 +4,7 @@ use strict;
 
 
 # Copyright 2004 Randy Smith
-# $Id: ExtLib.pm,v 1.20 2006/01/04 21:57:48 perlstalker Exp $
+# $Id: ExtLib.pm,v 1.20 2006-01-04 21:57:48 perlstalker Exp $
 
 our $VERSION = "0.3.0";
 

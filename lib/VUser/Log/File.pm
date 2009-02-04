@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith <perlstalker@vuser.org>
-# $Id: File.pm,v 1.5 2007/07/02 20:00:14 perlstalker Exp $
+# $Id: File.pm,v 1.5 2007-07-02 20:00:14 perlstalker Exp $
 
 our $VERSION = "0.3.0";
 

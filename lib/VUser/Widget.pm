@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith
-# $Id: Widget.pm,v 1.1 2005/04/05 14:59:20 perlstalker Exp $
+# $Id: Widget.pm,v 1.1 2005-04-05 14:59:20 perlstalker Exp $
 
 sub new
 {

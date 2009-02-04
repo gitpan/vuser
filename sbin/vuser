@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: vuser,v 1.29 2008/03/17 17:52:05 perlstalker Exp $
+# $Id: vuser,v 1.29 2008-03-17 17:52:05 perlstalker Exp $
 
 use Pod::Usage;
 use Getopt::Long qw(:config require_order);
@@ -15,7 +15,7 @@ use Config::IniFiles;
 use User::pwent;
 
 our $REVISION = (split (' ', '$Revision: 1.29 $'))[1];
-our $VERSION = "0.4.4";
+our $VERSION = "0.5.0";
 
 our $DEBUG = 0;
 
@@ -98,8 +98,25 @@ if ($debug) {
 }
 
 our $log = VUser::Log->new(\%cfg, 'vuser');
+
+## Load extensions
+if ($cfg{'vuser'}{'include paths'}) {
+    my @inc_paths = ();
+    if (ref $cfg{'vuser'}{'include paths'} eq 'ARRAY') {
+	@inc_paths = @{ $cfg{'vuser'}{'include paths'} };
+    } else {
+	@inc_paths = ($cfg{'vuser'}{'include paths'});
+    }
+    my @paths = map { split(/:|$/m) } @inc_paths;
+    foreach my $path (@paths) {
+	my $p = strip_ws($path);
+	$log->log(LOG_INFO, "Adding '$p' to \@INC");
+        push @INC, $p;
+    }
+}
+
 my $eh = new VUser::ExtHandler (\%cfg);
-$eh->load_extensions(%cfg);
+$eh->load_extensions(\%cfg);
 $eh->register_task('version', '', \&version, -10);
 
 $log->log(LOG_DEBUG, "Config loaded from $config_file");
@@ -116,6 +133,8 @@ if (defined $action
 
 $action = '' unless defined $action;
 
+my $exit_code = 0;
+
 # Ok. Now it's time to do the action.
 my $real_user = 'unknown';
 my $ent;
@@ -124,7 +143,12 @@ $real_user = $ent->name if (defined $ent);
 $log->log(LOG_NOTICE, "%s running %s %s", $real_user, $keyword, $action);
 my @rs;
 eval { @rs = $eh->run_tasks($keyword, $action, \%cfg); };
-warn $@ if $@;
+if ($@) {
+    # Should we change the exit code if there are warnings
+    # but everything completes?
+    $exit_code = 0;
+    warn $@;
+}
 
 if ($debug) {
     print "RS: "; use Data::Dumper; print Dumper \@rs;
@@ -135,6 +159,23 @@ if ($debug) {
 	  );
 }
 
+## Check for errors
+my @errors = VUser::ResultSet::get_all_errors(@rs);
+if (@errors) {
+    # Thar be errors here
+
+    foreach my $error (@errors) {
+	$exit_code = $error->{error_code};
+	foreach my $msg ($error->{errors}) {
+	    $log->log(LOG_ERROR, "error(%d): %s",
+		      $error->{error_code},
+		      $msg
+		);
+	}
+    }
+}
+
+## Display results
 if (check_bool($cfg{'vuser'}{'show result set'}) and @rs) {
     $cfg{'vuser'}{'display format'} = $format if defined $format;
     my $display = VUser::ResultSet::Display->new(\%cfg);
@@ -143,7 +184,7 @@ if (check_bool($cfg{'vuser'}{'show result set'}) and @rs) {
 
 eval { $eh->cleanup(%cfg); };
 
-exit;
+exit $exit_code;
 
 sub version
 {
@@ -185,7 +226,8 @@ vuser - Virtual user management utility
 
 =head1 SYNOPSIS
 
-vuser [--config=/path/to/vuser.conf] module action [options]
+ vuser [--config=/path/to/vuser.conf] module action [options]
+ vuser help [module]
 
 =head1 OPTIONS
 
@@ -226,8 +268,18 @@ You may specify the path to the configuration file with the C<--config> option.
  # Display the result set in a different format.
  # Allowed formats: CSV
  #display format = CSV
+ 
+ # Add paths to the include path
+ # This may be ':' or newline delimited in a heredoc or both
+ #include paths = /opt/lib:/home/user/lib
+ #include paths = <<PATHS
+ #/opt/lib:/home/vuser/lib
+ #/opt/vuser/plugins
+ #PATHS
 
 =head1 BUGS
+
+Report bugs at http://code.google.com/p/vuser/issues/list.
 
 =head1 SEE ALSO
 

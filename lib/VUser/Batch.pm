@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: Batch.pm,v 1.7 2007/09/24 19:31:53 perlstalker Exp $
+# $Id: Batch.pm,v 1.7 2007-09-24 19:31:53 perlstalker Exp $
 
 use vars qw(@ISA);
 

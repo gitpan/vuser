@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: ACL.pm,v 1.9 2006/01/04 21:57:48 perlstalker Exp $
+# $Id: ACL.pm,v 1.9 2006-01-04 21:57:48 perlstalker Exp $
 
 use Exporter;
 our @ISA = qw(Exporter);

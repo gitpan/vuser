@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2006 Randy Smith <perlstalker@vuser.org>
-# $Id: CSV.pm,v 1.1 2006/01/06 23:53:16 perlstalker Exp $
+# $Id: CSV.pm,v 1.1 2006-01-06 23:53:16 perlstalker Exp $
 
 use base qw(VUser::ResultSet::Display);
 

@@ -3,12 +3,12 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: CORE.pm,v 1.26 2007/09/21 20:40:19 perlstalker Exp $
+# $Id: CORE.pm,v 1.26 2007-09-21 20:40:19 perlstalker Exp $
 
 use vars qw(@ISA);
 
 our $REVISION = (split (' ', '$Revision: 1.26 $'))[1];
-our $VERSION = "0.4.3";
+our $VERSION = "0.4.4";
 
 use Pod::Usage;
 
@@ -52,6 +52,22 @@ CONFIG
     if (defined $opts->{file}) {
 	close $fh;
     }
+}
+
+sub config_inc {
+    my $cfg = shift;
+    my $opts = shift;
+
+    my $rs = VUser::ResultSet->new();
+    $rs->add_meta(VUser::Meta->new('name' => 'path',
+				   'type' => 'string',
+				   'description' => 'Include path')
+		  );
+    foreach my $path (@INC) {
+	$rs->add_data([$path]);
+    }
+
+    return $rs;
 }
 
 sub version
@@ -153,9 +169,12 @@ sub init
     $eh->register_action('config', 'file', 'Print the current config file.');
     $eh->register_task('config', 'file', \&config_file, 0);
 
-    $eh->register_action('config', 'sample', 'Print a sample config file.');
-    $eh->register_task('config', 'sample', \&config_sample, 0);
-    $eh->register_option('config', 'sample', 'file', '=s', 0, 'Write the sample to this file.');
+#    $eh->register_action('config', 'sample', 'Print a sample config file.');
+#    $eh->register_task('config', 'sample', \&config_sample, 0);
+#    $eh->register_option('config', 'sample', 'file', '=s', 0, 'Write the sample to this file.');
+
+    $eh->register_action('config', 'inc', 'Get the include paths');
+    $eh->register_task('config', 'inc', \&config_inc, 0);
 
     # Help
     $eh->register_keyword('help', 'Print help/usage information.');

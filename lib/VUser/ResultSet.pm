@@ -3,11 +3,11 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith
-# $Id: ResultSet.pm,v 1.9 2006/01/09 23:00:14 perlstalker Exp $
 
+use Carp;
 use VUser::Meta;
 
-our $VERSION = "0.3.0";
+our $VERSION = "0.5.0";
 
 sub new
 {
@@ -20,7 +20,9 @@ sub new
 		 rows => 0,
 		 order_by => undef,
 		 sort_order => 'asc',
-		 lock_meta => 0
+		 lock_meta => 0,
+		 error_code => undef,
+		 errors => []
 		 };
 
     bless $self, $class;
@@ -168,6 +170,75 @@ sub add_data
 
 sub version { return $VERSION; }
 
+sub error_code {
+    my $self = shift;
+    if (defined $_[0]) {
+	if ($_[0] =~ /^-?\d+$/) {
+	    $self->{error_code} = $_[0];
+	} else {
+	    carp "Error code is not an integer.\n";
+	}
+    }
+
+    return $self->{error_code};
+}
+
+sub errors {
+    my $self = shift;
+
+    if (wantarray) {
+	return @{ $self->{errors} };
+    } else {
+	return scalar @{ $self->{errors} };
+    }
+}
+
+sub add_error {
+    my $self = shift;
+    my $err = shift;
+    my @sprintf_args = @_;
+
+    if (defined $err) {
+	push (@{ $self->{errors} },
+	      sprintf ($err, @sprintf_args)
+	    );
+    }
+}
+
+sub error {
+    my $self = shift;
+
+    if (defined $self->{error_code}) {
+	return {'error_code' => $self->error_code(),
+		'errors' => $self->errors()};
+    } else {
+	return undef;
+    }
+}
+
+sub get_all_errors {
+    my @result_sets = @_;
+
+    my @errors = ();
+
+    # And empty @result_sets skips this preventing
+    # the recursion below from becoming infinite.
+    foreach my $set (@result_sets) {
+	if (eval { $set->isa('VUser::ResultSet') }) {
+	    if (defined $set->error_code) {
+		push (@errors, $set->error);
+	    }
+	} elsif (eval {ref $set eq 'ARRAY' } ) {
+	    # Watch the recursion ...
+	    foreach my $rs (get_all_errors(@{ $set })) {
+		push @errors, $rs;
+	    }
+	}
+    }
+
+    return @errors;
+}
+
 1;
 
 __END__
@@ -177,6 +248,27 @@ __END__
 VUser::ResultSet - Data returned by Extension tasks.
 
 =head1 DESCRIPTION
+
+VUser::ResultSets are used to return data from vuser extensions. An
+extension can also use it return errors.
+
+=head1 SYSNOPSIS
+
+
+ my $rs = VUser::ResultSet->new();
+ 
+ $rs->add_meta(VUser::Meta->new(name => "color", type => "string"));
+ $rs->add_meta(VUser::Meta->new(name => "size", type => "integer"));
+ 
+ $rs->add_data(["blue", 10]);
+ $rs->add_data(["orange", 6]);
+ 
+ # Returning errors
+ $rs->error_code(42);
+ $rs->add_error("Unknown question: %s",
+    'Life, the universe and everything.');
+ 
+ return $rs;
 
 =head1 METHODS
 
@@ -209,6 +301,29 @@ if values must match the number of meta data entries created with add_meta.
 
 Once add_data() has been called, no more meta data may be added to the
 ResultSet object.
+
+=back
+
+=head2 Returning Errors
+
+You can use a ResultSet to return errors from your extension.
+
+=over 4
+
+=item error_code($)
+
+Sets the error code for the result to the passed in integer value.
+If the value passed to C<error_code()> is not an integer, error_code()
+will complain and leave the error code unset.
+
+=item add_error($;@)
+
+Adds an error string to the list of errors. The parameters are passed to
+sprintf for formatting. See L<perlfunc/sprintf> for more details.
+
+=item errors()
+
+Returns the list of errors set by C<add_error()>.
 
 =back
 
@@ -287,7 +402,7 @@ result set methods:
 
  order_by($meta->name, asc|des); sets the sort order for results*()
 
-=head2 Accumulator interface (do later)
+=head2 Iterator interface (do later)
 
  reset(); reset current pointer to the beginning of the list
 
@@ -315,7 +430,7 @@ matches the data type specified with add_meta().
 
 =head1 AUTHOR
 
-Randy Smith <perlstalker@gmail.com>
+Randy Smith <perlstalker@vuser.org>
 
 =head1 LICENSE
  

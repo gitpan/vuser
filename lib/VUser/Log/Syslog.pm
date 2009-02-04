@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2005 Randy Smith <perlstalker@vuser.org>
-# $Id: Syslog.pm,v 1.6 2007/04/24 14:25:44 perlstalker Exp $
+# $Id: Syslog.pm,v 1.6 2007-04-24 14:25:44 perlstalker Exp $
 
 our $VERSION = "0.3.0";
 

@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 # Copyright 2004 Randy Smith
-# $Id: Test.pm,v 1.5 2006/01/04 21:57:48 perlstalker Exp $
+# $Id: Test.pm,v 1.5 2006-01-04 21:57:48 perlstalker Exp $
 
 our $REVISION = (split (' ', '$Revision: 1.5 $'))[1];
 our $VERSION = "0.3.0";
@@ -11,6 +11,8 @@ our $VERSION = "0.3.0";
 use vars qw(@ISA);
 use VUser::Extension;
 use VUser::Log qw(:levels);
+use VUser::Meta;
+use VUser::ResultSet;
 push @ISA, 'VUser::Extension';
 
 my $log;
@@ -45,6 +47,11 @@ sub init
 
     $eh->register_keyword('test', 'Test keyword. Don\'t use in production.');
 
+    $eh->register_meta('test', VUser::Meta->new(name => 'bar',
+						description => 'option bar',
+						type => 'string')
+	);
+
     $eh->register_action('test', '*');
     $eh->register_option('test', '*', $meta{foo});
     $eh->register_task('test', '*', \&test_task);
@@ -54,7 +61,11 @@ sub init
     $eh->register_option('test', 'meta', VUser::Meta->new(name => 'keyword',
 							  description => "See meta data for this keyword",
 							  type => 'string'));
+    $eh->register_option('test', 'meta', $eh->get_meta('test', 'bar'));
     $eh->register_task('test', 'meta', \&dump_meta);
+
+    $eh->register_action('test', 'rs', 'Test ::ResultSet');
+    $eh->register_task('test', 'rs', \&test_rs);
 }
 
 sub unload { return; }
@@ -79,6 +90,27 @@ sub dump_meta
 
     my @meta = $eh->get_meta($key);
     use Data::Dumper; print Dumper \@meta;
+}
+
+sub test_rs {
+    my ($cfg, $opts, $action, $eh) = @_;
+
+    my $rs = VUser::ResultSet->new();
+
+    $rs->add_meta(VUser::Meta->new('name' => 'str',
+				   'type' => 'string',
+				   'description' => 'A string'));
+    $rs->add_meta(VUser::Meta->new('name' => 'int',
+				   'type' => 'integer',
+				   'description' => 'An int'));
+
+    $rs->add_data(["blue", 2]);
+    $rs->add_data(["answer", 42]);
+
+    $rs->error_code(97);
+    $rs->add_error("foo: %s", "bar");
+
+    return $rs;
 }
 
 1;
